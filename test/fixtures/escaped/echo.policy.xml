@@ -1,0 +1,35 @@
+<policies>
+    <inbound>
+        <base />
+        <set-variable name="isPost" value="@(context.Request.Method == &quot;POST&quot;)" />
+        <choose>
+            <when condition="@(context.Request.Headers.GetValueOrDefault(&quot;X-Mode&quot;, &quot;&quot;) == &quot;debug&quot; &amp;&amp; context.Variables.GetValueOrDefault&lt;bool&gt;(&quot;isPost&quot;))">
+                <set-header name="X-Debug" exists-action="override">
+                    <value>@(context.RequestId.ToString())</value>
+                </set-header>
+            </when>
+            <otherwise />
+        </choose>
+        <set-header name="Authorization" exists-action="override">
+            <value>@(&quot;Bearer &quot; + &quot;{{backend-token}}&quot;)</value>
+        </set-header>
+        <set-body>@{
+            var body = context.Request.Body.As&lt;JObject&gt;(preserveContent: true);
+            var ids = body[&quot;items&quot;].Select(i =&gt; (string)i[&quot;id&quot;]).Where(id =&gt; id.Length &lt; 10).ToList();
+            if (ids.Count &gt; 0 &amp;&amp; ids[0] != &quot;}&quot;) { body[&quot;first&quot;] = ids[0]; }
+            return body.ToString();
+        }</set-body>
+        <rewrite-uri template="/v2/{id}" />
+    </inbound>
+    <backend>
+        <forward-request timeout="30" />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <set-header name="X-Error" exists-action="override">
+            <value>@(context.LastError.Message)</value>
+        </set-header>
+    </on-error>
+</policies>

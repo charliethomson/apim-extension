@@ -1,0 +1,3 @@
+<fragment>
+    <rate-limit-by-key calls="10" renewal-period="60" counter-key="@(context.Subscription?.Key ?? "anon")" />
+</fragment>

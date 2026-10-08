@@ -1,0 +1,6 @@
+<fragment>
+    <inbound>
+        <base />
+    </inbound>
+    <include-fragment fragment-id="auth-headers" />
+</fragment>

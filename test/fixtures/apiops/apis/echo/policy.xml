@@ -1,0 +1,22 @@
+<policies>
+    <inbound>
+        <base />
+        <include-fragment fragment-id="rate-limit" />
+        <validate-jwt header-name="Authorization" failed-validation-httpcode="401">
+            <openid-config url="https://login.microsoftonline.com/{{tenant-id}}/v2.0/.well-known/openid-configuration" />
+            <audiences>
+                <audience>{{api-audience}}</audience>
+            </audiences>
+        </validate-jwt>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+        <cache-store duration="60" />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

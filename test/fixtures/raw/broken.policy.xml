@@ -1,0 +1,14 @@
+<policies>
+    <inbound>
+        <set-variable name="a" value="@(context.Request.Method == "POST"" />
+        <set-variable name="b" value="ok" />
+        <set-header name="c">
+            <value>@(1 + </value>
+        </set-header>
+        <set-variable name="d" value="@("unterminated) />
+        <bogus-policy />
+    </inbound>
+    <outbound>
+        <validate-jwt header-name="Authorization" />
+    </outbound>
+</policies>

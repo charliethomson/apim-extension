@@ -1,0 +1,22 @@
+<policies>
+    <inbound>
+        <!-- strings and chars that contain brackets and quotes -->
+        <set-variable name="a" value="@(string.Join(")", new[] { "(", "}", "{" }))" />
+        <set-variable name="b" value="@(context.Request.Url.Path.Split('/').Last() + ')' + '"')" />
+        <set-variable name="c" value="@(@"C:\temp\" + @"say ""hi"")")" />
+        <set-variable name="d" value="@($"{context.Operation.Name}: {(context.Elapsed.TotalMilliseconds > 5 ? "slow" : "fast")} {context.Timestamp:yyyy-MM-dd}")" />
+        <set-variable name="e" value="@($@"{{literal}} {context.Api.Name} ""q"" }}")" />
+        <set-variable name="f" value='@(context.Request.Headers.ContainsKey("X-'Single'") ? 1 : 0)' />
+        <set-variable name="g" value="@(new Dictionary<string, List<int>>() { { "k", new List<int> { 1, 2 } } }.Count)" />
+        <set-variable name="h" value="@(context.Request.Headers.Where(h => h.Key.StartsWith("X-") && h.Value.Any(v => v != ")")).Count())" />
+        <set-body>@{
+            // a comment with ) and } and "
+            /* block comment ) } " */
+            var x = new JObject();
+            x["a"] = "</set-body>";
+            Func<int, int> sq = n => { return n * n; };
+            return x.ToString() + sq(3);
+        }</set-body>
+        <set-body><![CDATA[@{ return "<raw> & \"cdata\""; }]]></set-body>
+    </inbound>
+</policies>
