@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import { nodeAt } from '../parser/query';
-import type { Catalog, ElementDef } from '../policy/schema';
+import { resolveDef } from '../policy/defs';
+import type { Catalog } from '../policy/schema';
 
 /** Hover for policy element and attribute names (from the catalog) and named values. */
 export function registerPolicyHover(cache: DocumentCache, catalog: Catalog): vscode.Disposable {
@@ -35,14 +36,4 @@ export function registerPolicyHover(cache: DocumentCache, catalog: Catalog): vsc
       return undefined;
     },
   });
-}
-
-/** Finds the definition for the innermost element by walking child definitions from the nearest policy. */
-function resolveDef(path: { name: string }[], catalog: Catalog): ElementDef | undefined {
-  let def: ElementDef | undefined;
-  for (const el of path) {
-    const child = def?.content.kind === 'children' ? def.content.children.find((c) => c.name === el.name) : undefined;
-    def = child ?? catalog.get(el.name);
-  }
-  return def;
 }
