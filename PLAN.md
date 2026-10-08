@@ -1,6 +1,6 @@
 # APIM Policy extension: design
 
-Status: draft, waiting for sign-off. Nothing beyond this file has been written yet.
+Status: signed off 2026-10-08. Open questions resolved with the recommended defaults (see Decisions).
 
 ## Goals
 
@@ -330,10 +330,26 @@ C# Dev Kit installed. I'll stop there for your input.
 8. Named values + fragments.
 9. Integration tests, README, vsce packaging.
 
-## Open questions
+## Decisions
 
-1. **Detection of APIOps-style `policy.xml`.** I'd go with content sniffing (`detectByContent`, default on)
-   plus the user globs setting. The alternative is globs only.
-2. **Minimum VS Code version.** I'd target `^1.95`. The C# extension's current builds need a recent VS Code anyway.
-3. **Variant B needs the .NET 10 SDK and a NuGet restore on first use.** If your users are often offline or
-   on older SDKs, then variant A (no semantic diagnostics) is the floor, and diagnostics would need the sidecar.
+1. **APIOps detection.** `apimPolicy.files.detectByContent` (default on) plus the
+   `apimPolicy.files.include` globs.
+2. **Minimum VS Code** is `^1.95`.
+3. **C# backend.** The spike tries variant A and variant B, and the results decide. Variant A
+   is the floor when the .NET 10 SDK or NuGet isn't available.
+
+## Standards
+
+This repo vendors [`standards/`](standards/), and [`AGENTS.md`](AGENTS.md) lists the
+overrides for a TypeScript extension. What changes here:
+
+- **Versioning.** The version is derived as `MAJOR.MINOR.<commit count>` by
+  `scripts/ci/version.sh`, and `npm run package` passes it to vsce. The `package.json`
+  version stays a placeholder.
+- **Testing.** The 80% coverage floor (vitest v8 coverage) applies to the parser, the source
+  maps, the validator and the shadow generator.
+- **No change-detector tests.** Shadow-generation snapshots are only committed after the
+  output has been checked by eye. Most assertions are on behaviour, such as a position that
+  maps back correctly, or a diagnostic appearing.
+- **Commits.** Commit straight to `main`. README.md is updated in the same commit as any
+  behaviour it describes.
