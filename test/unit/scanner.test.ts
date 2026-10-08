@@ -152,6 +152,21 @@ describe('parse: tricky expressions', () => {
   });
 });
 
+describe('parse: large APIOps fragment and caller', () => {
+  it.each(['apiops/policyFragments/random-user-pipeline/policy.xml', 'apiops/apis/random-users/policy.xml'])(
+    '%s parses cleanly and every expression is closed where its attribute or element ends',
+    (file) => {
+      const doc = parse(fixture(file));
+      expect(doc.diagnostics).toEqual([]);
+      expect(doc.expressions.length).toBeGreaterThan(5);
+      for (const e of doc.expressions) {
+        const after = doc.source.slice(e.range.end).trimStart()[0];
+        expect(['"', "'", '<'], doc.source.slice(e.range.start, e.range.start + 60)).toContain(after);
+      }
+    },
+  );
+});
+
 describe('parse: error recovery', () => {
   const doc = parse(fixture('raw/broken.policy.xml'));
   const codes = doc.diagnostics.map((d) => d.code);

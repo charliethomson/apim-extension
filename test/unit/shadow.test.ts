@@ -40,7 +40,13 @@ const catalog = new Catalog({
 });
 
 describe('generateShadow', () => {
-  for (const file of ['raw/echo.policy.xml', 'escaped/echo.policy.xml', 'raw/tricky.policy.xml']) {
+  for (const file of [
+    'raw/echo.policy.xml',
+    'escaped/echo.policy.xml',
+    'raw/tricky.policy.xml',
+    'apiops/policyFragments/random-user-pipeline/policy.xml',
+    'apiops/apis/random-users/policy.xml',
+  ]) {
     it(`maps every generated code character back to the policy (${file})`, () => {
       const doc = parse(fixture(file));
       const shadow = generateShadow(doc, catalog);
