@@ -11,13 +11,15 @@
 
 #pragma warning disable CS1591
 
-using System;
-using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-
 namespace Apim.Policies
 {
+    // Usings live inside the namespace so this file can be appended verbatim to a generated
+    // file that already has its own usings.
+    using System;
+    using System.Collections.Generic;
+    using System.Security.Cryptography;
+    using System.Security.Cryptography.X509Certificates;
+
     /// <summary>The request context available to every policy expression as <c>context</c>.</summary>
     public interface IProxyRequestContext
     {
