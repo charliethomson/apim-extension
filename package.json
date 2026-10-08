@@ -108,7 +108,13 @@
           "markdownDescription": "Severity for .NET types and members that APIM doesn't allow in policy expressions."
         }
       }
-    }
+    },
+    "snippets": [
+      {
+        "language": "apim-policy",
+        "path": "./snippets/apim-policy.code-snippets"
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.mjs",
