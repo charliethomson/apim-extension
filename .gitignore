@@ -5,3 +5,5 @@ coverage/
 .vscode-test/
 *.vsix
 .DS_Store
+bin/
+obj/
