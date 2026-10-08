@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
+import { Allowlist, type AllowlistData, type BclIndex } from './csharp/allowedTypes';
 import { ShadowBackend } from './csharp/backend';
 import { parseStubs } from './csharp/stubModel';
 import { DocumentCache, LANGUAGE_ID } from './documents';
+import { registerAllowlistLint } from './features/allowlist';
 import { registerCSharpDiagnostics } from './features/csharpDiagnostics';
 import { registerStructuralDiagnostics } from './features/diagnostics';
 import { registerFragmentNavigation } from './features/fragments';
@@ -12,6 +14,8 @@ import { PolicyIndex } from './features/policyIndex';
 import { registerStatus } from './features/status';
 import { log } from './log';
 import { catalog } from './policy/catalog';
+import allowedTypes from '../data/allowed-types.json';
+import bclTypes from '../data/bcl-types.json';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const cache = new DocumentCache();
@@ -19,6 +23,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const stubsUri = vscode.Uri.joinPath(context.extensionUri, 'stubs', 'ApimContext.cs');
   const stubs = parseStubs(new TextDecoder().decode(await vscode.workspace.fs.readFile(stubsUri)));
 
+  const allow = new Allowlist(allowedTypes as unknown as AllowlistData, bclTypes as BclIndex, new Set([...stubs.keys(), 'PolicyExtensions', 'NamedValues']));
   const config = vscode.workspace.getConfiguration('apimPolicy.csharp');
   const enabled = config.get<boolean>('enabled', true);
   const mode = config.get<'auto' | 'file' | 'virtual'>('mode', 'auto');
@@ -51,6 +56,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerIntellisense({ cache, catalog, index, stubs, stubsUri, backend }),
     registerCSharpDiagnostics(cache, () => (vscode.workspace.textDocuments.some((d) => d.languageId === LANGUAGE_ID) ? backend() : Promise.resolve(undefined))),
     registerStatus(backend, enabled),
+    registerAllowlistLint(cache, allow, () => (vscode.workspace.textDocuments.some((d) => d.languageId === LANGUAGE_ID) ? backend() : Promise.resolve(undefined))),
   );
 }
 
