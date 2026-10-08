@@ -42,12 +42,16 @@ export function xmlCompletions(doc: Document, offset: number, ctx: XmlCompletion
   if (nv) return namedValueItems(src, offset, nv[1], ctx);
 
   if (doc.expressions.some((e) => offset >= e.codeRange.start && offset <= e.codeRange.end)) return undefined;
+  if (inOpaqueNode(doc.children, offset)) return undefined;
 
   const close = new RegExp(`</(${NAME})?$`).exec(before);
   if (close) return closeTagItems(doc, offset, close[1] ?? '');
 
   const open = new RegExp(`<(${NAME})?$`).exec(before);
-  if (open) return elementItems(doc, offset, open[1] ?? '', ctx.catalog);
+  if (open) {
+    const typed = open[1] ?? '';
+    return elementItems(doc, offset - typed.length - 1, { start: offset - typed.length, end: offset }, ctx.catalog, '');
+  }
 
   const tag = startTagAt(src, doc.children, offset);
   if (tag) {
@@ -64,17 +68,35 @@ export function xmlCompletions(doc: Document, offset: number, ctx: XmlCompletion
     const def = resolveDef(path, ctx.catalog);
     if (def?.content.kind === 'text' && def.content.expressions) return expressionSnippets({ start: offset - 1, end: offset });
   }
+
+  // A bare element name typed where elements go ("set-variable" without the '<').
+  const bare = new RegExp(`(^|[>\\s])(${NAME})$`).exec(before);
+  if (bare && acceptsElements(doc, offset - bare[2].length, ctx.catalog)) {
+    const typed = bare[2];
+    return elementItems(doc, offset - typed.length, { start: offset - typed.length, end: offset }, ctx.catalog, '<');
+  }
   return undefined;
 }
 
 // ---- elements ---------------------------------------------------------------------------
 
-function elementItems(doc: Document, offset: number, typed: string, catalog: Catalog): XmlItem[] {
-  const lt = offset - typed.length - 1;
-  const path = pathAt(doc.children, lt);
-  const range = { start: offset - typed.length, end: offset };
+/**
+ * Element names allowed at `anchor` (the '<' being typed, or the start of a bare name). `prefix`
+ * is put in front of each insertion: '' after a typed '<', '<' for a bare name.
+ */
+function elementItems(doc: Document, anchor: number, range: OffsetRange, catalog: Catalog, prefix: string): XmlItem[] {
+  const path = pathAt(doc.children, anchor);
   const parent = path[path.length - 1];
   const inFragment = path[0]?.name === 'fragment';
+  const element = (name: string, description: string, tail: string, r: OffsetRange, sortText?: string, detail?: string): XmlItem => ({
+    label: name,
+    kind: 'element',
+    insert: `${prefix}${name}${tail}`,
+    range: r,
+    documentation: description,
+    sortText,
+    detail,
+  });
 
   if (!parent) {
     return [
@@ -83,7 +105,7 @@ function elementItems(doc: Document, offset: number, typed: string, catalog: Cat
     ];
   }
   if (parent.name === 'policies' && path.length === 1) {
-    const present = new Set(childElements(parent).filter((e) => e.range.start !== lt).map((e) => e.name));
+    const present = new Set(childElements(parent).filter((e) => e.range.start !== anchor).map((e) => e.name));
     return SECTIONS.filter((s) => !present.has(s)).map((s, i) =>
       element(s, `The ${s} section.`, `>\n\t<base />$0\n</${s}>`, range, String(i)),
     );
@@ -109,8 +131,25 @@ function elementItems(doc: Document, offset: number, typed: string, catalog: Cat
   return items;
 }
 
-function element(name: string, description: string, tail: string, range: OffsetRange, sortText?: string, detail?: string): XmlItem {
-  return { label: name, kind: 'element', insert: `${name}${tail}`, range, documentation: description, sortText, detail };
+/** True inside a comment, CDATA section or declaration, where nothing should be offered. */
+function inOpaqueNode(nodes: Node[], offset: number): boolean {
+  for (const n of nodes) {
+    if (n.type === 'element') {
+      if (offset > n.range.start && offset <= n.range.end && inOpaqueNode(n.children, offset)) return true;
+    } else if ((n.type === 'comment' || n.type === 'cdata' || n.type === 'declaration') && offset > n.range.start && offset < n.range.end) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Whether the content at `pos` can hold elements (rather than text, or nothing). */
+function acceptsElements(doc: Document, pos: number, catalog: Catalog): boolean {
+  const path = pathAt(doc.children, pos);
+  const parent = path[path.length - 1];
+  if (!parent || parent.name === 'policies' || parent.name === 'fragment' || (SECTIONS as readonly string[]).includes(parent.name)) return true;
+  const kind = resolveDef(path, catalog)?.content.kind;
+  return kind === 'policies' || kind === 'children';
 }
 
 /** Required attributes as tab stops, then the right closing for the content model. */

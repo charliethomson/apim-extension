@@ -1,0 +1,153 @@
+{
+  "Policy document": {
+    "prefix": ["policies", "apim-policies"],
+    "description": "A policy document with all four sections inheriting from the parent scope.",
+    "body": [
+      "<policies>",
+      "\t<inbound>",
+      "\t\t<base />",
+      "\t\t$0",
+      "\t</inbound>",
+      "\t<backend>",
+      "\t\t<base />",
+      "\t</backend>",
+      "\t<outbound>",
+      "\t\t<base />",
+      "\t</outbound>",
+      "\t<on-error>",
+      "\t\t<base />",
+      "\t</on-error>",
+      "</policies>"
+    ]
+  },
+  "Policy fragment": {
+    "prefix": ["fragment", "apim-fragment"],
+    "description": "A policy fragment, used with include-fragment.",
+    "body": ["<fragment>", "\t$0", "</fragment>"]
+  },
+  "Validate Entra ID token": {
+    "prefix": ["validate-jwt-entra", "apim-jwt"],
+    "description": "validate-jwt against Microsoft Entra ID with an audience and a required claim.",
+    "body": [
+      "<validate-jwt header-name=\"Authorization\" failed-validation-httpcode=\"401\" failed-validation-error-message=\"${1:Unauthorized}\" require-scheme=\"Bearer\">",
+      "\t<openid-config url=\"https://login.microsoftonline.com/${2:{{tenant-id\\}\\}}/v2.0/.well-known/openid-configuration\" />",
+      "\t<audiences>",
+      "\t\t<audience>${3:api://my-api}</audience>",
+      "\t</audiences>",
+      "\t<required-claims>",
+      "\t\t<claim name=\"${4:roles}\" match=\"any\">",
+      "\t\t\t<value>${5:Reader}</value>",
+      "\t\t</claim>",
+      "\t</required-claims>",
+      "</validate-jwt>"
+    ]
+  },
+  "Choose": {
+    "prefix": ["choose-when", "apim-choose"],
+    "description": "choose with one condition and an otherwise branch.",
+    "body": [
+      "<choose>",
+      "\t<when condition=\"@(${1:context.Request.Method == \"POST\"})\">",
+      "\t\t$0",
+      "\t</when>",
+      "\t<otherwise>",
+      "\t</otherwise>",
+      "</choose>"
+    ]
+  },
+  "Send request and read the response": {
+    "prefix": ["send-request-json", "apim-send-request"],
+    "description": "Call another service, then read its JSON response into a variable.",
+    "body": [
+      "<send-request mode=\"new\" response-variable-name=\"${1:lookupResponse}\" timeout=\"${2:20}\" ignore-error=\"false\">",
+      "\t<set-url>${3:https://example.com/lookup}</set-url>",
+      "\t<set-method>${4:GET}</set-method>",
+      "\t<set-header name=\"Accept\" exists-action=\"override\">",
+      "\t\t<value>application/json</value>",
+      "\t</set-header>",
+      "</send-request>",
+      "<set-variable name=\"${5:lookup}\" value=\"@(((IResponse)context.Variables[\"${1}\"]).Body.As<JObject>())\" />"
+    ]
+  },
+  "Return JSON response": {
+    "prefix": ["return-response-json", "apim-return-json"],
+    "description": "Stop processing and return a JSON response.",
+    "body": [
+      "<return-response>",
+      "\t<set-status code=\"${1:400}\" reason=\"${2:Bad Request}\" />",
+      "\t<set-header name=\"Content-Type\" exists-action=\"override\">",
+      "\t\t<value>application/json</value>",
+      "\t</set-header>",
+      "\t<set-body>@(new JObject(new JProperty(\"error\", \"${3:message}\")).ToString())</set-body>",
+      "</return-response>"
+    ]
+  },
+  "CORS": {
+    "prefix": ["cors-origins", "apim-cors"],
+    "description": "Allow cross-origin calls from listed origins.",
+    "body": [
+      "<cors allow-credentials=\"${1|false,true|}\">",
+      "\t<allowed-origins>",
+      "\t\t<origin>${2:https://contoso.com}</origin>",
+      "\t</allowed-origins>",
+      "\t<allowed-methods>",
+      "\t\t<method>GET</method>",
+      "\t\t<method>POST</method>",
+      "\t</allowed-methods>",
+      "\t<allowed-headers>",
+      "\t\t<header>*</header>",
+      "\t</allowed-headers>",
+      "</cors>"
+    ]
+  },
+  "Rate limit by subscription": {
+    "prefix": ["rate-limit-subscription", "apim-rate-limit"],
+    "description": "Limit calls per subscription key, falling back to the caller's IP.",
+    "body": [
+      "<rate-limit-by-key calls=\"${1:100}\" renewal-period=\"${2:60}\" counter-key=\"@(context.Subscription?.Key ?? context.Request.IpAddress)\" increment-condition=\"@(context.Response.StatusCode < 400)\" remaining-calls-header-name=\"x-ratelimit-remaining\" />"
+    ]
+  },
+  "Transform JSON body": {
+    "prefix": ["set-body-json", "apim-transform-json"],
+    "description": "Rewrite the JSON body with an expression block.",
+    "body": [
+      "<set-body>@{",
+      "\tvar body = context.${1|Request,Response|}.Body.As<JObject>(preserveContent: true);",
+      "\t$0",
+      "\treturn body.ToString();",
+      "}</set-body>"
+    ]
+  },
+  "Forward with retry": {
+    "prefix": ["retry-forward", "apim-retry"],
+    "description": "Forward to the backend, retrying on server errors.",
+    "body": [
+      "<retry condition=\"@(context.Response.StatusCode >= 500)\" count=\"${1:3}\" interval=\"${2:1}\" first-fast-retry=\"true\">",
+      "\t<forward-request buffer-request-body=\"true\" timeout=\"${3:60}\" />",
+      "</retry>"
+    ]
+  },
+  "Managed identity token": {
+    "prefix": ["authentication-managed-identity-header", "apim-managed-identity"],
+    "description": "Get a token with the gateway's managed identity and send it to the backend.",
+    "body": [
+      "<authentication-managed-identity resource=\"${1:https://management.azure.com/}\" output-token-variable-name=\"${2:msiToken}\" ignore-error=\"false\" />",
+      "<set-header name=\"Authorization\" exists-action=\"override\">",
+      "\t<value>@(\"Bearer \" + (string)context.Variables[\"${2}\"])</value>",
+      "</set-header>"
+    ]
+  },
+  "Cache a value": {
+    "prefix": ["cache-value", "apim-cache-value"],
+    "description": "Look up a cached value and compute and store it on a miss.",
+    "body": [
+      "<cache-lookup-value key=\"${1:my-key}\" variable-name=\"${2:cached}\" />",
+      "<choose>",
+      "\t<when condition=\"@(!context.Variables.ContainsKey(\"${2}\"))\">",
+      "\t\t$0",
+      "\t\t<cache-store-value key=\"${1}\" value=\"@((string)context.Variables[\"${2}\"])\" duration=\"${3:300}\" />",
+      "\t</when>",
+      "</choose>"
+    ]
+  }
+}

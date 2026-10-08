@@ -72,6 +72,27 @@ describe('xmlCompletions: elements', () => {
   });
 });
 
+describe('xmlCompletions: bare element names', () => {
+  it('offers elements for a name typed without <, inserting the <', () => {
+    const { items, src } = complete('<policies><inbound>\n  set-var|\n</inbound></policies>');
+    const item = items!.find((i) => i.label === 'set-variable')!;
+    expect(item.insert).toBe('<set-variable name="$1" value="$2" />');
+    expect(src.slice(item.range.start, item.range.end)).toBe('set-var');
+  });
+
+  it('respects the section and content model', () => {
+    expect(complete('<policies><backend>\n  forw|\n</backend></policies>').labels).toContain('forward-request');
+    expect(complete('<policies><backend>\n  valid|\n</backend></policies>').labels).not.toContain('validate-jwt');
+    expect(complete('<policies><inbound><choose>\n  wh|\n</choose></inbound></policies>').labels).toEqual(['when', 'otherwise']);
+  });
+
+  it('stays out of text content, comments and CDATA', () => {
+    expect(complete('<policies><inbound><set-method>GE|</set-method></inbound></policies>').items).toBeUndefined();
+    expect(complete('<policies><inbound><!-- set-var| --></inbound></policies>').items).toBeUndefined();
+    expect(complete('<policies><inbound><set-body><![CDATA[ set-var| ]]></set-body></inbound></policies>').items).toBeUndefined();
+  });
+});
+
 describe('xmlCompletions: attributes', () => {
   it('offers attributes not yet present, required first', () => {
     const { items } = complete('<policies><inbound><set-header exists-action="skip" |/></inbound></policies>');
