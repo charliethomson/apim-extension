@@ -1,0 +1,476 @@
+<!--
+    random-user-pipeline
+
+    Fetches people from randomuser.me, filters, projects, sorts and summarises them.
+
+    ARGUMENTS (set these as variables before <include-fragment fragment-id="random-user-pipeline" />)
+        ru-arg-base-url          string   https URL on randomuser.me            default https://randomuser.me/api/
+        ru-arg-results           int      1..5000                               default 10
+        ru-arg-page              int      1..1000                               default 1
+        ru-arg-seed              string   [A-Za-z0-9-]{1,64}                    default (none)
+        ru-arg-gender            string   "", "male", "female"                  default ""
+        ru-arg-nationalities     csv      subset of the supported nat codes     default (all)
+        ru-arg-include-fields    csv      subset of the response fields         default (all)
+        ru-arg-min-age           int      0..120                                default 0
+        ru-arg-max-age           int      0..120, >= min-age                    default 120
+        ru-arg-sort-by           string   "none", "age", "last-name", "email"   default "none"
+        ru-arg-sort-direction    string   "asc", "desc"                         default "asc"
+        ru-arg-take              int      0..5000 (0 = no limit)                default 0
+        ru-arg-timeout-seconds   int      1..30                                 default 10
+        ru-arg-cache-seconds     int      0..3600 (0 = no cache, needs seed)    default 0
+        ru-arg-fail-mode         string   "soft", "throw"                       default "soft"
+
+    RETURN VALUES (read these after the include)
+        ru-ret-status            string   "ok", "empty", "invalid-args", "upstream-error"
+        ru-ret-errors            JArray   validation or upstream messages
+        ru-ret-request-url       string   the URL that was (or would have been) called
+        ru-ret-cache-hit         bool
+        ru-ret-elapsed-ms        int      time spent inside the fragment
+        ru-ret-users             JArray   the projected users
+        ru-ret-count             int
+        ru-ret-average-age       double   0 when empty
+        ru-ret-oldest-email      string   "" when empty
+        ru-ret-nationality-histogram  JObject  { "GB": 3, ... }
+        ru-ret-gender-ratio      string   "f:m", e.g. "3:2"
+
+    Everything named ru-int-* is internal. Don't read it, don't set it.
+-->
+<fragment>
+    <!-- ===================================================================== -->
+    <!-- 0. bookkeeping                                                        -->
+    <!-- ===================================================================== -->
+    <set-variable name="ru-int-started-at" value="@(DateTime.UtcNow.Ticks)" />
+    <set-variable name="ru-ret-status" value="pending" />
+    <set-variable name="ru-ret-errors" value="@(new JArray())" />
+    <set-variable name="ru-ret-cache-hit" value="@(false)" />
+    <set-variable name="ru-ret-users" value="@(new JArray())" />
+    <set-variable name="ru-ret-count" value="@(0)" />
+    <set-variable name="ru-ret-average-age" value="@(0d)" />
+    <set-variable name="ru-ret-oldest-email" value="" />
+    <set-variable name="ru-ret-nationality-histogram" value="@(new JObject())" />
+    <set-variable name="ru-ret-gender-ratio" value="0:0" />
+    <set-variable name="ru-ret-request-url" value="" />
+
+    <!-- ===================================================================== -->
+    <!-- 1. normalise arguments                                                -->
+    <!--    every argument is read as object so callers can pass "5" or 5      -->
+    <!-- ===================================================================== -->
+    <set-variable name="ru-int-base-url" value="@{
+        var raw = Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-base-url", "https://randomuser.me/api/"));
+        raw = (raw ?? "").Trim();
+        return raw.EndsWith("/") ? raw : raw + "/";
+    }" />
+    <set-variable name="ru-int-results-raw" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-results", "10")).Trim())" />
+    <set-variable name="ru-int-page-raw" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-page", "1")).Trim())" />
+    <set-variable name="ru-int-seed" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-seed", "")).Trim())" />
+    <set-variable name="ru-int-gender" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-gender", "")).Trim().ToLowerInvariant())" />
+    <set-variable name="ru-int-nationalities" value="@{
+        var csv = Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-nationalities", ""));
+        return string.Join(",", (csv ?? "")
+            .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(n => n.Trim().ToUpperInvariant())
+            .Distinct());
+    }" />
+    <set-variable name="ru-int-include-fields" value="@{
+        var csv = Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-include-fields", ""));
+        return string.Join(",", (csv ?? "")
+            .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(f => f.Trim().ToLowerInvariant())
+            .Distinct());
+    }" />
+    <set-variable name="ru-int-min-age-raw" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-min-age", "0")).Trim())" />
+    <set-variable name="ru-int-max-age-raw" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-max-age", "120")).Trim())" />
+    <set-variable name="ru-int-sort-by" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-sort-by", "none")).Trim().ToLowerInvariant())" />
+    <set-variable name="ru-int-sort-direction" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-sort-direction", "asc")).Trim().ToLowerInvariant())" />
+    <set-variable name="ru-int-take-raw" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-take", "0")).Trim())" />
+    <set-variable name="ru-int-timeout-raw" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-timeout-seconds", "10")).Trim())" />
+    <set-variable name="ru-int-cache-raw" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-cache-seconds", "0")).Trim())" />
+    <set-variable name="ru-int-fail-mode" value="@(Convert.ToString(context.Variables.GetValueOrDefault<object>("ru-arg-fail-mode", "soft")).Trim().ToLowerInvariant())" />
+
+    <!-- ===================================================================== -->
+    <!-- 2. validate                                                           -->
+    <!--    collects every problem instead of stopping at the first one        -->
+    <!-- ===================================================================== -->
+    <set-variable name="ru-int-errors" value="@{
+        var errors = new JArray();
+        Func<string, string, int, int, int?> parseRange = (name, raw, min, max) => {
+            int parsed;
+            if (!int.TryParse(raw, out parsed)) {
+                errors.Add($"{name} must be an integer, got \"{raw}\"");
+                return null;
+            }
+            if (parsed < min || parsed > max) {
+                errors.Add($"{name} must be between {min} and {max}, got {parsed}");
+                return null;
+            }
+            return parsed;
+        };
+
+        // base url: https, randomuser.me only, no query string smuggling
+        Uri baseUri;
+        var baseUrl = (string)context.Variables["ru-int-base-url"];
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out baseUri)) {
+            errors.Add($"ru-arg-base-url is not an absolute URL: \"{baseUrl}\"");
+        } else {
+            if (baseUri.Scheme != "https") { errors.Add("ru-arg-base-url must use https"); }
+            if (baseUri.Host != "randomuser.me" && !baseUri.Host.EndsWith(".randomuser.me")) {
+                errors.Add($"ru-arg-base-url host must be randomuser.me, got {baseUri.Host}");
+            }
+            if (!string.IsNullOrEmpty(baseUri.Query) || !string.IsNullOrEmpty(baseUri.Fragment)) {
+                errors.Add("ru-arg-base-url must not carry a query string or fragment");
+            }
+        }
+
+        var results = parseRange("ru-arg-results", (string)context.Variables["ru-int-results-raw"], 1, 5000);
+        var page = parseRange("ru-arg-page", (string)context.Variables["ru-int-page-raw"], 1, 1000);
+        var minAge = parseRange("ru-arg-min-age", (string)context.Variables["ru-int-min-age-raw"], 0, 120);
+        var maxAge = parseRange("ru-arg-max-age", (string)context.Variables["ru-int-max-age-raw"], 0, 120);
+        var take = parseRange("ru-arg-take", (string)context.Variables["ru-int-take-raw"], 0, 5000);
+        parseRange("ru-arg-timeout-seconds", (string)context.Variables["ru-int-timeout-raw"], 1, 30);
+        var cache = parseRange("ru-arg-cache-seconds", (string)context.Variables["ru-int-cache-raw"], 0, 3600);
+
+        if (minAge.HasValue && maxAge.HasValue && minAge.Value > maxAge.Value) {
+            errors.Add($"ru-arg-min-age ({minAge}) must not exceed ru-arg-max-age ({maxAge})");
+        }
+        if (take.HasValue && results.HasValue && take.Value > results.Value) {
+            errors.Add($"ru-arg-take ({take}) asks for more users than ru-arg-results ({results}) fetches");
+        }
+
+        // paging without a seed returns a fresh random set per page, which is never what anyone wants
+        var seed = (string)context.Variables["ru-int-seed"];
+        if (seed.Length > 0 && !Regex.IsMatch(seed, "^[A-Za-z0-9-]{1,64}$")) {
+            errors.Add("ru-arg-seed must match [A-Za-z0-9-]{1,64}");
+        }
+        if (page.HasValue && page.Value > 1 && seed.Length == 0) {
+            errors.Add("ru-arg-page > 1 needs ru-arg-seed, otherwise every page is a different population");
+        }
+        if (cache.HasValue && cache.Value > 0 && seed.Length == 0) {
+            errors.Add("ru-arg-cache-seconds > 0 needs ru-arg-seed, unseeded responses are random and caching them lies");
+        }
+
+        var gender = (string)context.Variables["ru-int-gender"];
+        if (gender != "" && gender != "male" && gender != "female") {
+            errors.Add($"ru-arg-gender must be empty, \"male\" or \"female\", got \"{gender}\"");
+        }
+
+        var knownNats = new HashSet<string> {
+            "AU", "BR", "CA", "CH", "DE", "DK", "ES", "FI", "FR", "GB", "IE",
+            "IN", "IR", "MX", "NL", "NO", "NZ", "RS", "TR", "UA", "US"
+        };
+        var nats = (string)context.Variables["ru-int-nationalities"];
+        foreach (var nat in nats.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) {
+            if (!knownNats.Contains(nat)) {
+                errors.Add($"ru-arg-nationalities contains unsupported code \"{nat}\"");
+            }
+        }
+
+        var knownFields = new HashSet<string> {
+            "gender", "name", "location", "email", "login", "registered",
+            "dob", "phone", "cell", "id", "picture", "nat"
+        };
+        var fields = ((string)context.Variables["ru-int-include-fields"])
+            .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var field in fields) {
+            if (!knownFields.Contains(field)) {
+                errors.Add($"ru-arg-include-fields contains unknown field \"{field}\"");
+            }
+        }
+
+        // the post-processing below reads these, so they can't be projected away
+        var sortBy = (string)context.Variables["ru-int-sort-by"];
+        var needed = new List<string> { "dob", "email", "nat", "gender" };
+        if (sortBy == "last-name") { needed.Add("name"); }
+        if (fields.Length > 0) {
+            foreach (var need in needed.Where(n => !fields.Contains(n))) {
+                errors.Add($"ru-arg-include-fields must include \"{need}\" for the summary values");
+            }
+        }
+
+        if (sortBy != "none" && sortBy != "age" && sortBy != "last-name" && sortBy != "email") {
+            errors.Add($"ru-arg-sort-by must be none, age, last-name or email, got \"{sortBy}\"");
+        }
+        var direction = (string)context.Variables["ru-int-sort-direction"];
+        if (direction != "asc" && direction != "desc") {
+            errors.Add($"ru-arg-sort-direction must be asc or desc, got \"{direction}\"");
+        }
+        if (sortBy == "none" && direction == "desc") {
+            errors.Add("ru-arg-sort-direction desc has no effect with ru-arg-sort-by none");
+        }
+
+        var failMode = (string)context.Variables["ru-int-fail-mode"];
+        if (failMode != "soft" && failMode != "throw") {
+            errors.Add($"ru-arg-fail-mode must be soft or throw, got \"{failMode}\"");
+        }
+
+        return errors;
+    }" />
+
+    <choose>
+        <when condition="@(((JArray)context.Variables["ru-int-errors"]).Count > 0)">
+            <set-variable name="ru-ret-status" value="invalid-args" />
+            <set-variable name="ru-ret-errors" value="@((JArray)context.Variables["ru-int-errors"])" />
+            <trace source="random-user-pipeline" severity="warning">
+                <message>@(string.Join("; ", ((JArray)context.Variables["ru-int-errors"]).Select(e => (string)e)))</message>
+                <metadata name="stage" value="validate" />
+            </trace>
+            <choose>
+                <when condition="@((string)context.Variables["ru-int-fail-mode"] == "throw")">
+                    <return-response>
+                        <set-status code="400" reason="Invalid random-user-pipeline arguments" />
+                        <set-header name="Content-Type" exists-action="override">
+                            <value>application/problem+json</value>
+                        </set-header>
+                        <set-body>@{
+                            return new JObject {
+                                ["type"] = "https://thmsn.dev/problems/random-user-pipeline/invalid-args",
+                                ["title"] = "The random-user-pipeline fragment was called with invalid arguments",
+                                ["status"] = 400,
+                                ["errors"] = (JArray)context.Variables["ru-int-errors"],
+                                ["traceId"] = context.RequestId.ToString(),
+                            }.ToString();
+                        }</set-body>
+                    </return-response>
+                </when>
+            </choose>
+        </when>
+        <otherwise>
+            <!-- ============================================================= -->
+            <!-- 3. build the request                                          -->
+            <!-- ============================================================= -->
+            <set-variable name="ru-int-query" value="@{
+                var parts = new List<KeyValuePair<string, string>> {
+                    new KeyValuePair<string, string>("results", (string)context.Variables["ru-int-results-raw"]),
+                    new KeyValuePair<string, string>("page", (string)context.Variables["ru-int-page-raw"]),
+                    new KeyValuePair<string, string>("format", "json"),
+                    new KeyValuePair<string, string>("noinfo", "")
+                };
+                var seed = (string)context.Variables["ru-int-seed"];
+                if (seed != "") { parts.Add(new KeyValuePair<string, string>("seed", seed)); }
+                var gender = (string)context.Variables["ru-int-gender"];
+                if (gender != "") { parts.Add(new KeyValuePair<string, string>("gender", gender)); }
+                var nats = (string)context.Variables["ru-int-nationalities"];
+                if (nats != "") { parts.Add(new KeyValuePair<string, string>("nat", nats.ToLowerInvariant())); }
+                var fields = (string)context.Variables["ru-int-include-fields"];
+                if (fields != "") { parts.Add(new KeyValuePair<string, string>("inc", fields)); }
+
+                // sorted so the cache key is stable regardless of argument order
+                return string.Join("&", parts
+                    .OrderBy(p => p.Key, StringComparer.Ordinal)
+                    .Select(p => p.Value == "" ? Uri.EscapeDataString(p.Key) : $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
+            }" />
+            <set-variable name="ru-ret-request-url" value="@((string)context.Variables["ru-int-base-url"] + "?" + (string)context.Variables["ru-int-query"])" />
+            <set-variable name="ru-int-cache-key" value="@("random-user-pipeline:v1:" + (string)context.Variables["ru-int-query"])" />
+            <set-variable name="ru-int-cache-seconds" value="@(int.Parse((string)context.Variables["ru-int-cache-raw"]))" />
+
+            <!-- ============================================================= -->
+            <!-- 4. cache, then upstream                                       -->
+            <!-- ============================================================= -->
+            <choose>
+                <when condition="@((int)context.Variables["ru-int-cache-seconds"] > 0)">
+                    <cache-lookup-value key="@((string)context.Variables["ru-int-cache-key"])" variable-name="ru-int-cached-body" caching-type="prefer-external" />
+                </when>
+            </choose>
+
+            <choose>
+                <when condition="@(context.Variables.GetValueOrDefault<string>("ru-int-cached-body") != null)">
+                    <set-variable name="ru-ret-cache-hit" value="@(true)" />
+                    <set-variable name="ru-int-body" value="@(JObject.Parse((string)context.Variables["ru-int-cached-body"]))" />
+                </when>
+                <otherwise>
+                    <send-request mode="new" response-variable-name="ru-int-response" timeout="@(int.Parse((string)context.Variables["ru-int-timeout-raw"]))" ignore-error="true">
+                        <set-url>@((string)context.Variables["ru-ret-request-url"])</set-url>
+                        <set-method>GET</set-method>
+                        <set-header name="Accept" exists-action="override">
+                            <value>application/json</value>
+                        </set-header>
+                        <set-header name="User-Agent" exists-action="override">
+                            <value>@($"apim-random-user-pipeline/1 ({context.Deployment.ServiceName})")</value>
+                        </set-header>
+                        <set-header name="X-Correlation-Id" exists-action="override">
+                            <value>@(context.RequestId.ToString())</value>
+                        </set-header>
+                    </send-request>
+
+                    <choose>
+                        <when condition="@(!context.Variables.ContainsKey("ru-int-response") || context.Variables["ru-int-response"] == null)">
+                            <set-variable name="ru-ret-status" value="upstream-error" />
+                            <set-variable name="ru-ret-errors" value="@(new JArray($"randomuser.me did not answer within {context.Variables["ru-int-timeout-raw"]}s"))" />
+                        </when>
+                        <when condition="@(((IResponse)context.Variables["ru-int-response"]).StatusCode != 200)">
+                            <set-variable name="ru-ret-status" value="upstream-error" />
+                            <set-variable name="ru-ret-errors" value="@{
+                                var response = (IResponse)context.Variables["ru-int-response"];
+                                var detail = response.Body.As<string>(preserveContent: true);
+                                if (detail.Length > 200) { detail = detail.Substring(0, 200) + "..."; }
+                                return new JArray($"randomuser.me returned {response.StatusCode} {response.StatusReason}: {detail}");
+                            }" />
+                        </when>
+                        <otherwise>
+                            <set-variable name="ru-int-body" value="@(((IResponse)context.Variables["ru-int-response"]).Body.As<JObject>(preserveContent: true))" />
+                            <choose>
+                                <when condition="@(((JObject)context.Variables["ru-int-body"])["error"] != null)">
+                                    <!-- randomuser.me answers 200 with { "error": "..." } when it's overloaded -->
+                                    <set-variable name="ru-ret-status" value="upstream-error" />
+                                    <set-variable name="ru-ret-errors" value="@(new JArray("randomuser.me: " + (string)((JObject)context.Variables["ru-int-body"])["error"]))" />
+                                </when>
+                                <when condition="@((int)context.Variables["ru-int-cache-seconds"] > 0)">
+                                    <cache-store-value key="@((string)context.Variables["ru-int-cache-key"])" value="@(((JObject)context.Variables["ru-int-body"]).ToString(Newtonsoft.Json.Formatting.None))" duration="@((int)context.Variables["ru-int-cache-seconds"])" caching-type="prefer-external" />
+                                </when>
+                            </choose>
+                        </otherwise>
+                    </choose>
+                </otherwise>
+            </choose>
+
+            <!-- ============================================================= -->
+            <!-- 5. filter, project, sort, take                                -->
+            <!-- ============================================================= -->
+            <choose>
+                <when condition="@((string)context.Variables["ru-ret-status"] == "pending")">
+                    <set-variable name="ru-ret-users" value="@{
+                        var body = (JObject)context.Variables["ru-int-body"];
+                        var minAge = int.Parse((string)context.Variables["ru-int-min-age-raw"]);
+                        var maxAge = int.Parse((string)context.Variables["ru-int-max-age-raw"]);
+                        var sortBy = (string)context.Variables["ru-int-sort-by"];
+                        var descending = (string)context.Variables["ru-int-sort-direction"] == "desc";
+                        var take = int.Parse((string)context.Variables["ru-int-take-raw"]);
+
+                        var users = ((JArray)body["results"] ?? new JArray())
+                            .OfType<JObject>()
+                            .Where(u => {
+                                var age = (int?)u.SelectToken("dob.age") ?? -1;
+                                return age >= minAge && age <= maxAge;
+                            })
+                            .Select(u => {
+                                var projected = new JObject {
+                                    ["id"] = (string)u.SelectToken("login.uuid") ?? Guid.NewGuid().ToString(),
+                                    ["email"] = ((string)u["email"] ?? "").ToLowerInvariant(),
+                                    ["gender"] = (string)u["gender"],
+                                    ["nat"] = (string)u["nat"],
+                                    ["age"] = (int?)u.SelectToken("dob.age"),
+                                    ["bornOn"] = ((DateTime?)u.SelectToken("dob.date"))?.ToString("yyyy-MM-dd"),
+                                };
+                                if (u["name"] != null) {
+                                    projected["displayName"] = string.Join(" ", new[] {
+                                        (string)u.SelectToken("name.title"),
+                                        (string)u.SelectToken("name.first"),
+                                        (string)u.SelectToken("name.last")
+                                    }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                                    projected["lastName"] = (string)u.SelectToken("name.last");
+                                }
+                                if (u["location"] != null) {
+                                    projected["city"] = (string)u.SelectToken("location.city");
+                                    projected["country"] = (string)u.SelectToken("location.country");
+                                    projected["timezone"] = (string)u.SelectToken("location.timezone.offset");
+                                }
+                                if (u["picture"] != null) {
+                                    projected["avatar"] = (string)u.SelectToken("picture.thumbnail");
+                                }
+                                if (u["phone"] != null || u["cell"] != null) {
+                                    projected["phones"] = new JArray(
+                                        new[] { (string)u["phone"], (string)u["cell"] }
+                                            .Where(p => !string.IsNullOrEmpty(p))
+                                            .Select(p => Regex.Replace(p, "[^0-9+]", ""))
+                                            .Distinct()
+                                    );
+                                }
+                                return projected;
+                            });
+
+                        Func<JObject, IComparable> key;
+                        switch (sortBy) {
+                            case "age": key = u => (int?)u["age"] ?? 0; break;
+                            case "last-name": key = u => ((string)u["lastName"] ?? "").ToLowerInvariant(); break;
+                            case "email": key = u => (string)u["email"] ?? ""; break;
+                            default: key = null; break;
+                        }
+                        if (key != null) {
+                            users = descending ? users.OrderByDescending(key) : users.OrderBy(key);
+                        }
+                        if (take > 0) {
+                            users = users.Take(take);
+                        }
+                        return new JArray(users);
+                    }" />
+
+                    <!-- ========================================================= -->
+                    <!-- 6. summarise                                              -->
+                    <!-- ========================================================= -->
+                    <set-variable name="ru-ret-count" value="@(((JArray)context.Variables["ru-ret-users"]).Count)" />
+                    <set-variable name="ru-ret-average-age" value="@{
+                        var ages = ((JArray)context.Variables["ru-ret-users"])
+                            .Select(u => (int?)u["age"])
+                            .Where(a => a.HasValue)
+                            .Select(a => a.Value)
+                            .ToList();
+                        return ages.Count == 0 ? 0d : Math.Round(ages.Average(), 2);
+                    }" />
+                    <set-variable name="ru-ret-oldest-email" value="@{
+                        var oldest = ((JArray)context.Variables["ru-ret-users"])
+                            .OrderByDescending(u => (int?)u["age"] ?? -1)
+                            .ThenBy(u => (string)u["email"])
+                            .FirstOrDefault();
+                        return oldest == null ? "" : (string)oldest["email"];
+                    }" />
+                    <set-variable name="ru-ret-nationality-histogram" value="@{
+                        var histogram = new JObject();
+                        foreach (var group in ((JArray)context.Variables["ru-ret-users"])
+                            .GroupBy(u => (string)u["nat"] ?? "??")
+                            .OrderByDescending(g => g.Count())
+                            .ThenBy(g => g.Key)) {
+                            histogram[group.Key] = group.Count();
+                        }
+                        return histogram;
+                    }" />
+                    <set-variable name="ru-ret-gender-ratio" value="@{
+                        var users = (JArray)context.Variables["ru-ret-users"];
+                        var f = users.Count(u => (string)u["gender"] == "female");
+                        var m = users.Count(u => (string)u["gender"] == "male");
+                        return $"{f}:{m}";
+                    }" />
+                    <set-variable name="ru-ret-status" value="@((int)context.Variables["ru-ret-count"] == 0 ? "empty" : "ok")" />
+                </when>
+            </choose>
+
+            <!-- ============================================================= -->
+            <!-- 7. upstream failure in throw mode                             -->
+            <!-- ============================================================= -->
+            <choose>
+                <when condition="@((string)context.Variables["ru-ret-status"] == "upstream-error" && (string)context.Variables["ru-int-fail-mode"] == "throw")">
+                    <return-response>
+                        <set-status code="502" reason="randomuser.me failed" />
+                        <set-header name="Content-Type" exists-action="override">
+                            <value>application/problem+json</value>
+                        </set-header>
+                        <set-header name="Retry-After" exists-action="override">
+                            <value>5</value>
+                        </set-header>
+                        <set-body>@(new JObject {
+                            ["type"] = "https://thmsn.dev/problems/random-user-pipeline/upstream-error",
+                            ["title"] = "randomuser.me could not be reached or returned an error",
+                            ["status"] = 502,
+                            ["errors"] = (JArray)context.Variables["ru-ret-errors"],
+                            ["upstream"] = (string)context.Variables["ru-ret-request-url"],
+                            ["traceId"] = context.RequestId.ToString(),
+                        }.ToString())</set-body>
+                    </return-response>
+                </when>
+            </choose>
+        </otherwise>
+    </choose>
+
+    <!-- ===================================================================== -->
+    <!-- 8. epilogue                                                           -->
+    <!-- ===================================================================== -->
+    <set-variable name="ru-ret-elapsed-ms" value="@((int)TimeSpan.FromTicks(DateTime.UtcNow.Ticks - (long)context.Variables["ru-int-started-at"]).TotalMilliseconds)" />
+    <trace source="random-user-pipeline" severity="information">
+        <message>@($"status={context.Variables["ru-ret-status"]} count={context.Variables["ru-ret-count"]} cacheHit={context.Variables["ru-ret-cache-hit"]} elapsedMs={context.Variables["ru-ret-elapsed-ms"]}")</message>
+        <metadata name="stage" value="done" />
+        <metadata name="request-url" value="@((string)context.Variables["ru-ret-request-url"])" />
+    </trace>
+
+    <!-- APIM has no remove-variable, so blank out the big internals to keep later traces readable -->
+    <set-variable name="ru-int-body" value="@((object)null)" />
+    <set-variable name="ru-int-response" value="@((object)null)" />
+    <set-variable name="ru-int-cached-body" value="@((object)null)" />
+</fragment>
