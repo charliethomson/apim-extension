@@ -2,5 +2,4 @@
     <set-header name="X-Caller" exists-action="override">
         <value>@(context.User?.Email ?? "anonymous")</value>
     </set-header>
-    <include-fragment fragment-id="rate-limit" />
 </fragment>

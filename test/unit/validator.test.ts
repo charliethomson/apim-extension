@@ -229,3 +229,36 @@ describe('validate', () => {
     });
   });
 });
+
+describe('validate with the bundled catalog', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { catalog: real } = await import('../../src/policy/catalog');
+  const run = (file: string) =>
+    validate(parse(readFileSync(join(__dirname, '..', 'fixtures', file), 'utf8')), real).map((d) => d.code);
+
+  it.each([
+    'raw/echo.policy.xml',
+    'escaped/echo.policy.xml',
+    'raw/tricky.policy.xml',
+    'fragments/auth-headers.xml',
+    'apiops/apis/echo/policy.xml',
+    'apiops/apis/random-users/policy.xml',
+    'apiops/policyFragments/rate-limit/policy.xml',
+    'apiops/policyFragments/random-user-pipeline/policy.xml',
+  ])('%s is valid', (file) => {
+    expect(run(file)).toEqual([]);
+  });
+
+  it('flags the broken fixtures', () => {
+    expect(run('fragments/bad-fragment.xml')).toEqual(['fragment-section', 'nested-fragment']);
+    expect(run('raw/broken.policy.xml')).toEqual(['unknown-policy', 'wrong-section']);
+  });
+
+  it('knows every policy the docs index lists', () => {
+    expect(real.names.length).toBeGreaterThanOrEqual(60);
+    for (const name of ['set-header', 'choose', 'include-fragment', 'base', 'llm-token-limit', 'validate-jwt']) {
+      expect(real.get(name), name).toBeDefined();
+    }
+  });
+});
