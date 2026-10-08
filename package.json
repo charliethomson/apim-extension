@@ -95,6 +95,17 @@
           ],
           "default": "auto",
           "markdownDescription": "How expressions are given to the C# language server. Takes effect after a reload."
+        },
+        "apimPolicy.allowedTypes.severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "information",
+            "off"
+          ],
+          "default": "warning",
+          "markdownDescription": "Severity for .NET types and members that APIM doesn't allow in policy expressions."
         }
       }
     }

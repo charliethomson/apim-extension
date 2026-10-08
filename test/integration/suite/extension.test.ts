@@ -71,7 +71,7 @@ describe('APIM policy extension', () => {
     });
 
     it('stays quiet on valid policies', async () => {
-      const doc = await open('raw/tricky.policy.xml');
+      const doc = await open('escaped/echo.policy.xml');
       await sleep(withCSharp ? 8000 : 1000);
       assert.deepEqual(vscode.languages.getDiagnostics(doc.uri).map((d) => `${d.source} ${d.code} ${d.message}`), []);
     });
@@ -172,6 +172,21 @@ describe('APIM policy extension', () => {
       const err = diags.find((d) => d.code === 'CS1061')!;
       assert.equal(doc.getText(err.range), 'Nope');
       assert.ok(!diags.some((d) => /Newtonsoft|JObject/.test(d.message)), 'no restore noise');
+    });
+
+    it('flags disallowed types syntactically and disallowed members semantically', async () => {
+      await setText(
+        doc,
+        doc.getText().replace('value="@(context.Request.)"', 'value="@(System.IO.File.ReadAllText(&quot;x&quot;) + DateTime.Now.ToBinary())"'),
+      );
+      const diags = await waitFor(
+        () => vscode.languages.getDiagnostics(doc.uri).filter((d) => String(d.code).startsWith('disallowed-')),
+        (d) => d.length >= 2,
+        60000,
+      );
+      const found = diags.map((d) => `${d.code}:${doc.getText(d.range)}`).sort();
+      assert.deepEqual(found, ['disallowed-member:ToBinary', 'disallowed-type:System.IO.File']);
+      assert.equal(diags[0].severity, vscode.DiagnosticSeverity.Warning);
     });
 
     it('updates type errors after an edit', async () => {
