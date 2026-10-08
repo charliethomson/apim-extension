@@ -255,6 +255,36 @@ C# Dev Kit installed. I'll stop there for your input.
   on the machine, and we'd own completion/hover formatting.
 - I'd only propose this with spike evidence.
 
+### Spike results (2026-10-08)
+
+The spike ran C# extension 2.160.4 on VS Code 1.141, with no C# Dev Kit and an empty
+workspace. The code is in `test/spike/`, and you run it with `node out/spike/run.js` after
+building.
+
+| | A: virtual doc | B: on-disk file-based app, hidden |
+|---|---|---|
+| Completion on `context.` / `context.Request.` | yes, 368ms first, then about 10ms | yes, 30–380ms first, then about 10ms |
+| Hover with stub doc comments | yes | yes |
+| Signature help (both `GetValueOrDefault` overloads) | yes | yes |
+| Go-to-definition | yes, into the virtual doc | yes, into the shadow file |
+| `JObject` (Newtonsoft) | no | yes, 3.6s after open on an empty NuGet cache |
+| Semantic errors (`CS1061`) | no, syntax only | yes, through a `textDocument/diagnostic` pull |
+| Pushed diagnostics while hidden | no | no; pulled through `experimental.sendServerRequest` |
+| Errors updated after an in-memory edit | | 160ms |
+
+What I learned from it:
+
+- **Activation.** A `csharp` document activates the C# extension (`onLanguage:csharp`). It
+  doesn't need a project, and `initializationFinished` never resolves without one, so we don't wait on it.
+- **Edits.** The shadow has to be updated with a `WorkspaceEdit` on the open document. Writing
+  the file to disk isn't noticed, because the folder is outside the workspace.
+- **What makes it a file-based app.** It needs a `#:` directive plus a top-level statement.
+  `#:property LangVersion=7.3` rejects the top-level statement (CS8370), and the shebang +
+  `OutputType=Library` form falls back to a misc file, which loses Newtonsoft and semantics.
+  So C# 7.3 isn't enforced by the server.
+- **Decision.** B is the primary path. A is the fallback when the .NET 10 SDK is missing, and
+  while B's first restore is running.
+
 ## 5. Context stubs
 
 `stubs/ApimContext.cs`:
