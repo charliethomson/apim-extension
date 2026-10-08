@@ -80,9 +80,13 @@ function preview(v: string | undefined): string | undefined {
 export interface KnownVariable extends VariableDef {
   /** Where it comes from, for display: undefined for this file. */
   origin?: string;
+  /** The `key` of the related file that defines it; undefined for this file. */
+  originKey?: string;
 }
 
 export interface RelatedFile {
+  /** Opaque identifier passed back as `originKey`. */
+  key?: string;
   label: string;
   fragmentIds: string[];
   summary: PolicySummary;
@@ -94,16 +98,16 @@ export interface RelatedFile {
  */
 export function knownVariables(self: PolicySummary, selfFragmentIds: readonly string[], others: readonly RelatedFile[]): KnownVariable[] {
   const out = new Map<string, KnownVariable>();
-  const add = (vars: VariableDef[], origin?: string) => {
-    for (const v of vars) if (!out.has(v.name)) out.set(v.name, { ...v, origin });
+  const add = (vars: VariableDef[], origin?: string, originKey?: string) => {
+    for (const v of vars) if (!out.has(v.name)) out.set(v.name, { ...v, origin, originKey });
   };
   add(self.variables);
   for (const o of others) {
-    if (o.fragmentIds.some((id) => self.includes.includes(id))) add(o.summary.variables, `fragment ${o.fragmentIds[0]}`);
+    if (o.fragmentIds.some((id) => self.includes.includes(id))) add(o.summary.variables, `fragment ${o.fragmentIds[0]}`, o.key);
   }
   if (self.root === 'fragment') {
     for (const o of others) {
-      if (o.summary.includes.some((id) => selfFragmentIds.includes(id))) add(o.summary.variables, `set by ${o.label}`);
+      if (o.summary.includes.some((id) => selfFragmentIds.includes(id))) add(o.summary.variables, `set by ${o.label}`, o.key);
     }
   }
   return [...out.values()];

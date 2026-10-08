@@ -25,7 +25,8 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onLanguage:xml"
+    "onLanguage:xml",
+    "onLanguage:apim-policy"
   ],
   "contributes": {
     "languages": [
@@ -74,6 +75,26 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Treat an `.xml` file as an APIM policy when its root element is `<policies>` or `<fragment>`. Covers the APIOps `policy.xml` layout."
+        },
+        "apimPolicy.csharp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "C# IntelliSense and type checking inside policy expressions. Needs the C# extension (`ms-dotnettools.csharp`)."
+        },
+        "apimPolicy.csharp.mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "file",
+            "virtual"
+          ],
+          "enumDescriptions": [
+            "`file` when the .NET 10 SDK is installed, otherwise `virtual`.",
+            "A hidden .NET 10 file-based app in extension storage: completion, hover and type errors.",
+            "An in-memory document: completion and hover only, no type errors."
+          ],
+          "default": "auto",
+          "markdownDescription": "How expressions are given to the C# language server. Takes effect after a reload."
         }
       }
     }
@@ -84,8 +105,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "node esbuild.mjs && tsc -p test/integration && node out/test/integration/runTest.js",
-    "package": "node esbuild.mjs --production && vsce package --no-update-package-json --no-dependencies \"$(scripts/ci/version.sh)\""
+    "test:integration": "node esbuild.mjs && node esbuild.mjs --tests && node out/test/integration/runTest.js",
+    "package": "node esbuild.mjs --production && vsce package --no-update-package-json --no-dependencies \"$(scripts/ci/version.sh)\"",
+    "spike": "node esbuild.mjs --spike && node out/spike/run.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
