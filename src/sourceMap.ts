@@ -158,6 +158,13 @@ export class SourceMapBuilder {
     return this;
   }
 
+  /** Appends `genLen` generated characters whose mapping is `map` (rebased to the cursor). */
+  embed(map: SourceMap, genLen: number): this {
+    for (const s of map.segments) this.segments.push({ ...s, gen: s.gen + this.cursor });
+    this.cursor += genLen;
+    return this;
+  }
+
   /** Generated text with no source. */
   skip(genLen: number): this {
     this.cursor += genLen;
