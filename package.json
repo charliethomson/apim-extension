@@ -1,0 +1,104 @@
+{
+  "name": "apim-policy",
+  "displayName": "Azure APIM Policies",
+  "description": "Editor support for Azure API Management policy files: tolerant parsing, structural diagnostics and C# IntelliSense inside policy expressions.",
+  "version": "0.0.1",
+  "publisher": "thmsn",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/charliethomson/apim-extension"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "azure",
+    "apim",
+    "api management",
+    "policy",
+    "policies"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:xml"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "apim-policy",
+        "aliases": [
+          "APIM Policy",
+          "apim-policy"
+        ],
+        "filenamePatterns": [
+          "*.policy.xml"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "apim-policy",
+        "scopeName": "text.xml.apim",
+        "path": "./syntaxes/apim-policy.tmLanguage.json"
+      },
+      {
+        "scopeName": "apim.expression.injection",
+        "path": "./syntaxes/apim-expression.injection.json",
+        "injectTo": [
+          "text.xml.apim"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.expression.cs": "csharp",
+          "meta.embedded.block.cs": "csharp"
+        }
+      }
+    ],
+    "configuration": {
+      "title": "APIM Policy",
+      "properties": {
+        "apimPolicy.files.include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra glob patterns for XML files that are APIM policies, for example `**/policies/**/*.xml`. `*.policy.xml` is always included."
+        },
+        "apimPolicy.files.detectByContent": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Treat an `.xml` file as an APIM policy when its root element is `<policies>` or `<fragment>`. Covers the APIOps `policy.xml` layout."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "node esbuild.mjs && tsc -p test/integration && node out/test/integration/runTest.js",
+    "package": "node esbuild.mjs --production && vsce package --no-update-package-json --no-dependencies \"$(scripts/ci/version.sh)\""
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.19.43",
+    "@types/vscode": "~1.95.0",
+    "@vitest/coverage-v8": "^3.2.7",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "mocha": "^11.8.0",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}

@@ -1,0 +1,10 @@
+**
+!dist/extension.js
+!syntaxes/**
+!data/**
+!stubs/**
+!language-configuration.json
+!package.json
+!README.md
+!LICENSE
+!images/**
