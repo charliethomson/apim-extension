@@ -209,7 +209,7 @@
         <when condition="@(((JArray)context.Variables["ru-int-errors"]).Count > 0)">
             <set-variable name="ru-ret-status" value="invalid-args" />
             <set-variable name="ru-ret-errors" value="@((JArray)context.Variables["ru-int-errors"])" />
-            <trace source="random-user-pipeline" severity="warning">
+            <trace source="random-user-pipeline" severity="information">
                 <message>@(string.Join("; ", ((JArray)context.Variables["ru-int-errors"]).Select(e => (string)e)))</message>
                 <metadata name="stage" value="validate" />
             </trace>

@@ -1,0 +1,5486 @@
+{
+  "$comment": "Hand-maintained from the Microsoft Learn APIM policy reference (per-policy pages), last updated 2026-10-08.",
+  "policies": [
+    {
+      "name": "rate-limit",
+      "description": "Throttles call rate per subscription over a sliding time window.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/rate-limit-policy",
+      "category": "Rate limiting and quotas",
+      "attributes": [
+        {
+          "name": "calls",
+          "required": true,
+          "type": "int",
+          "description": "Maximum calls permitted within the renewal window."
+        },
+        {
+          "name": "renewal-period",
+          "required": true,
+          "type": "int",
+          "description": "Sliding window length in seconds, up to 300."
+        },
+        {
+          "name": "retry-after-header-name",
+          "description": "Custom response header carrying the suggested retry delay."
+        },
+        {
+          "name": "retry-after-variable-name",
+          "description": "Variable that receives the suggested retry delay."
+        },
+        {
+          "name": "remaining-calls-header-name",
+          "description": "Response header reporting calls left in the window."
+        },
+        {
+          "name": "remaining-calls-variable-name",
+          "description": "Variable that receives calls left in the window."
+        },
+        {
+          "name": "total-calls-header-name",
+          "description": "Response header echoing the configured calls limit."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "api",
+            "description": "Separate rate limit for one API within the product.",
+            "attributes": [
+              {
+                "name": "name",
+                "description": "Name of the API to limit."
+              },
+              {
+                "name": "id",
+                "description": "Identifier of the API to limit; wins over name."
+              },
+              {
+                "name": "calls",
+                "required": true,
+                "type": "int",
+                "description": "Maximum calls permitted within the renewal window."
+              },
+              {
+                "name": "renewal-period",
+                "required": true,
+                "type": "int",
+                "description": "Sliding window length in seconds, up to 300."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "operation",
+                  "description": "Separate rate limit for one operation within the API.",
+                  "attributes": [
+                    {
+                      "name": "name",
+                      "description": "Name of the operation to limit."
+                    },
+                    {
+                      "name": "id",
+                      "description": "Identifier of the operation to limit; wins over name."
+                    },
+                    {
+                      "name": "calls",
+                      "required": true,
+                      "type": "int",
+                      "description": "Maximum calls permitted within the renewal window."
+                    },
+                    {
+                      "name": "renewal-period",
+                      "required": true,
+                      "type": "int",
+                      "description": "Sliding window length in seconds, up to 300."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rate-limit-by-key",
+      "description": "Throttles call rate per custom key over a sliding window.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/rate-limit-by-key-policy",
+      "category": "Rate limiting and quotas",
+      "attributes": [
+        {
+          "name": "calls",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Maximum calls per key within the renewal window."
+        },
+        {
+          "name": "counter-key",
+          "required": true,
+          "expressions": true,
+          "description": "Key value identifying which counter to use."
+        },
+        {
+          "name": "increment-condition",
+          "expressions": true,
+          "type": "bool",
+          "description": "Boolean deciding whether this request counts toward the limit."
+        },
+        {
+          "name": "increment-count",
+          "expressions": true,
+          "type": "int",
+          "description": "Amount added to the counter per request."
+        },
+        {
+          "name": "renewal-period",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Sliding window length in seconds, up to 300."
+        },
+        {
+          "name": "retry-after-header-name",
+          "description": "Custom response header carrying the suggested retry delay."
+        },
+        {
+          "name": "retry-after-variable-name",
+          "description": "Variable that receives the suggested retry delay."
+        },
+        {
+          "name": "remaining-calls-header-name",
+          "description": "Response header reporting calls left for the key."
+        },
+        {
+          "name": "remaining-calls-variable-name",
+          "description": "Variable that receives calls left for the key."
+        },
+        {
+          "name": "total-calls-header-name",
+          "description": "Response header echoing the configured calls limit."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "quota",
+      "description": "Enforces a renewable or lifetime call or bandwidth quota per subscription.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/quota-policy",
+      "category": "Rate limiting and quotas",
+      "attributes": [
+        {
+          "name": "bandwidth",
+          "type": "int",
+          "description": "Maximum kilobytes permitted per renewal period."
+        },
+        {
+          "name": "calls",
+          "type": "int",
+          "description": "Maximum calls permitted per renewal period."
+        },
+        {
+          "name": "renewal-period",
+          "required": true,
+          "type": "int",
+          "description": "Fixed window in seconds; 0 means never resets."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "api",
+            "description": "Separate quota for one API within the product.",
+            "attributes": [
+              {
+                "name": "name",
+                "description": "Name of the API the quota applies to."
+              },
+              {
+                "name": "id",
+                "description": "Identifier of the API; takes precedence over name."
+              },
+              {
+                "name": "bandwidth",
+                "type": "int",
+                "description": "Maximum kilobytes permitted per renewal period."
+              },
+              {
+                "name": "calls",
+                "type": "int",
+                "description": "Maximum calls permitted per renewal period."
+              },
+              {
+                "name": "renewal-period",
+                "required": true,
+                "type": "int",
+                "description": "Fixed window in seconds; 0 means never resets."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "operation",
+                  "description": "Separate quota for one operation within the API.",
+                  "attributes": [
+                    {
+                      "name": "name",
+                      "description": "Name of the operation the quota applies to."
+                    },
+                    {
+                      "name": "id",
+                      "description": "Identifier of the operation; takes precedence over name."
+                    },
+                    {
+                      "name": "bandwidth",
+                      "type": "int",
+                      "description": "Maximum kilobytes permitted per renewal period."
+                    },
+                    {
+                      "name": "calls",
+                      "type": "int",
+                      "description": "Maximum calls permitted per renewal period."
+                    },
+                    {
+                      "name": "renewal-period",
+                      "required": true,
+                      "type": "int",
+                      "description": "Fixed window in seconds; 0 means never resets."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "quota-by-key",
+      "description": "Enforces a renewable or lifetime call or bandwidth quota per custom key.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/quota-by-key-policy",
+      "category": "Rate limiting and quotas",
+      "attributes": [
+        {
+          "name": "bandwidth",
+          "type": "int",
+          "description": "Maximum kilobytes permitted per renewal period."
+        },
+        {
+          "name": "calls",
+          "type": "int",
+          "description": "Maximum calls permitted per renewal period."
+        },
+        {
+          "name": "counter-key",
+          "required": true,
+          "expressions": true,
+          "description": "Key value identifying which quota counter to use."
+        },
+        {
+          "name": "increment-condition",
+          "expressions": true,
+          "type": "bool",
+          "description": "Boolean deciding whether this request counts toward the quota."
+        },
+        {
+          "name": "increment-count",
+          "expressions": true,
+          "type": "int",
+          "description": "Amount added to the counter per request."
+        },
+        {
+          "name": "renewal-period",
+          "required": true,
+          "type": "int",
+          "description": "Fixed window in seconds; 0 means never resets."
+        },
+        {
+          "name": "first-period-start",
+          "description": "ISO 8601 start time for quota renewal periods."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "limit-concurrency",
+      "description": "Caps how many requests may run the enclosed policies at once.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/limit-concurrency-policy",
+      "category": "Rate limiting and quotas",
+      "attributes": [
+        {
+          "name": "key",
+          "required": true,
+          "expressions": true,
+          "description": "Concurrency scope name, shareable across policies."
+        },
+        {
+          "name": "max-count",
+          "required": true,
+          "type": "int",
+          "description": "Most requests allowed inside the policy simultaneously."
+        }
+      ],
+      "content": {
+        "kind": "policies"
+      }
+    },
+    {
+      "name": "llm-token-limit",
+      "description": "Limits LLM token consumption per key by rate, quota, or both.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/llm-token-limit-policy",
+      "category": "Rate limiting and quotas",
+      "attributes": [
+        {
+          "name": "counter-key",
+          "required": true,
+          "expressions": true,
+          "description": "Key value identifying which token counter to use."
+        },
+        {
+          "name": "tokens-per-minute",
+          "type": "int",
+          "description": "Prompt plus completion tokens allowed each minute."
+        },
+        {
+          "name": "token-quota",
+          "expressions": true,
+          "type": "int",
+          "description": "Tokens allowed during each quota period."
+        },
+        {
+          "name": "token-quota-period",
+          "expressions": true,
+          "enum": [
+            "Hourly",
+            "Daily",
+            "Weekly",
+            "Monthly",
+            "Yearly"
+          ],
+          "description": "Fixed window after which the token quota resets."
+        },
+        {
+          "name": "estimate-prompt-tokens",
+          "required": true,
+          "type": "bool",
+          "description": "Whether to estimate prompt tokens before calling the model."
+        },
+        {
+          "name": "retry-after-header-name",
+          "description": "Custom response header carrying the suggested retry delay."
+        },
+        {
+          "name": "retry-after-variable-name",
+          "description": "Variable that receives the suggested retry delay."
+        },
+        {
+          "name": "remaining-quota-tokens-header-name",
+          "description": "Response header reporting estimated quota tokens left."
+        },
+        {
+          "name": "remaining-quota-tokens-variable-name",
+          "description": "Variable that receives estimated quota tokens left."
+        },
+        {
+          "name": "remaining-tokens-header-name",
+          "description": "Response header reporting per-minute tokens left."
+        },
+        {
+          "name": "remaining-tokens-variable-name",
+          "description": "Variable that receives per-minute tokens left."
+        },
+        {
+          "name": "tokens-consumed-header-name",
+          "description": "Response header reporting total tokens used."
+        },
+        {
+          "name": "tokens-consumed-variable-name",
+          "description": "Variable tracking estimated, then actual, tokens used."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "check-header",
+      "description": "Requires an HTTP header to exist and optionally match allowed values.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/check-header-policy",
+      "category": "Authentication and authorization",
+      "attributes": [
+        {
+          "name": "name",
+          "required": true,
+          "expressions": true,
+          "description": "Header to inspect."
+        },
+        {
+          "name": "failed-check-httpcode",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Status code returned when the check fails."
+        },
+        {
+          "name": "failed-check-error-message",
+          "required": true,
+          "expressions": true,
+          "description": "Response body message when the check fails."
+        },
+        {
+          "name": "ignore-case",
+          "required": true,
+          "expressions": true,
+          "type": "bool",
+          "description": "Compare header values without regard to case."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "value",
+            "description": "An accepted header value; any match passes.",
+            "content": {
+              "kind": "text"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "get-authorization-context",
+      "description": "Fetches the authorization context for a credential manager connection.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/get-authorization-context-policy",
+      "category": "Authentication and authorization",
+      "attributes": [
+        {
+          "name": "provider-id",
+          "required": true,
+          "expressions": true,
+          "description": "Credential provider resource identifier."
+        },
+        {
+          "name": "authorization-id",
+          "required": true,
+          "expressions": true,
+          "description": "Connection resource identifier."
+        },
+        {
+          "name": "context-variable-name",
+          "required": true,
+          "expressions": true,
+          "description": "Variable that receives the Authorization object."
+        },
+        {
+          "name": "identity-type",
+          "expressions": true,
+          "enum": [
+            "managed",
+            "jwt"
+          ],
+          "description": "Identity checked against the connection access policy."
+        },
+        {
+          "name": "identity",
+          "expressions": true,
+          "description": "Entra JWT used when identity-type is jwt."
+        },
+        {
+          "name": "ignore-error",
+          "expressions": true,
+          "type": "bool",
+          "description": "On failure, set variable to null instead of returning 500."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "ip-filter",
+      "description": "Allows or blocks callers by IP address or address range.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/ip-filter-policy",
+      "category": "Authentication and authorization",
+      "attributes": [
+        {
+          "name": "action",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "allow",
+            "forbid"
+          ],
+          "description": "Whether listed addresses are allowed or forbidden."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "address",
+            "description": "A single IP address to filter on.",
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          },
+          {
+            "name": "address-range",
+            "description": "An inclusive IP address range to filter on.",
+            "attributes": [
+              {
+                "name": "from",
+                "required": true,
+                "description": "First address in the range."
+              },
+              {
+                "name": "to",
+                "required": true,
+                "description": "Last address in the range."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "validate-azure-ad-token",
+      "description": "Validates a Microsoft Entra JWT taken from a header, query parameter, or value.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/validate-azure-ad-token-policy",
+      "category": "Authentication and authorization",
+      "attributes": [
+        {
+          "name": "tenant-id",
+          "required": true,
+          "expressions": true,
+          "description": "Entra tenant ID, URL, or well-known tenant name."
+        },
+        {
+          "name": "header-name",
+          "expressions": true,
+          "description": "Header holding the token; defaults to Authorization."
+        },
+        {
+          "name": "query-parameter-name",
+          "expressions": true,
+          "description": "Query parameter that carries the token."
+        },
+        {
+          "name": "token-value",
+          "expressions": true,
+          "description": "Expression yielding the raw token without Bearer prefix."
+        },
+        {
+          "name": "authentication-endpoint",
+          "description": "Entra login endpoint, e.g. for national clouds."
+        },
+        {
+          "name": "failed-validation-httpcode",
+          "expressions": true,
+          "type": "int",
+          "description": "Status code returned when validation fails."
+        },
+        {
+          "name": "failed-validation-error-message",
+          "expressions": true,
+          "description": "Response body message when validation fails."
+        },
+        {
+          "name": "output-token-variable-name",
+          "description": "Variable that receives the validated Jwt object."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "backend-application-ids",
+            "description": "Acceptable backend application IDs; rarely needed.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "application-id",
+                  "description": "One acceptable backend application ID.",
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "client-application-ids",
+            "description": "Acceptable client application IDs; any match passes.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "application-id",
+                  "description": "One acceptable client application ID.",
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "audiences",
+            "description": "Acceptable audience claim values; any match passes.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "audience",
+                  "description": "One acceptable audience value.",
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "required-claims",
+            "description": "Claims that must appear in the token.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "claim",
+                  "description": "A claim that must be present, with acceptable values.",
+                  "attributes": [
+                    {
+                      "name": "name",
+                      "required": true,
+                      "expressions": true,
+                      "description": "Claim name as it appears in the token."
+                    },
+                    {
+                      "name": "match",
+                      "expressions": true,
+                      "enum": [
+                        "all",
+                        "any"
+                      ],
+                      "description": "Require all listed values or any one."
+                    },
+                    {
+                      "name": "separator",
+                      "expressions": true,
+                      "description": "Character splitting a multi-valued claim."
+                    }
+                  ],
+                  "content": {
+                    "kind": "children",
+                    "children": [
+                      {
+                        "name": "value",
+                        "description": "One acceptable claim value.",
+                        "content": {
+                          "kind": "text"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "decryption-keys",
+            "description": "Keys used to decrypt tokens encrypted with an asymmetric key.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "key",
+                  "description": "Decryption key referencing an uploaded certificate.",
+                  "attributes": [
+                    {
+                      "name": "certificate-id",
+                      "required": true,
+                      "description": "ID of a certificate stored in API Management."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "validate-jwt",
+      "description": "Validates a JWT taken from a header, query parameter, or value.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/validate-jwt-policy",
+      "category": "Authentication and authorization",
+      "attributes": [
+        {
+          "name": "header-name",
+          "expressions": true,
+          "description": "Header holding the token."
+        },
+        {
+          "name": "query-parameter-name",
+          "expressions": true,
+          "description": "Query parameter that carries the token."
+        },
+        {
+          "name": "token-value",
+          "expressions": true,
+          "description": "Expression yielding the raw token without Bearer prefix."
+        },
+        {
+          "name": "failed-validation-httpcode",
+          "expressions": true,
+          "type": "int",
+          "description": "Status code returned when validation fails."
+        },
+        {
+          "name": "failed-validation-error-message",
+          "expressions": true,
+          "description": "Response body message when validation fails."
+        },
+        {
+          "name": "require-expiration-time",
+          "expressions": true,
+          "type": "bool",
+          "description": "Whether the token must carry an expiration claim."
+        },
+        {
+          "name": "require-scheme",
+          "expressions": true,
+          "description": "Required Authorization scheme, such as Bearer."
+        },
+        {
+          "name": "require-signed-tokens",
+          "expressions": true,
+          "type": "bool",
+          "description": "Whether the token must be signed."
+        },
+        {
+          "name": "clock-skew",
+          "expressions": true,
+          "description": "Tolerated clock difference with the issuer, as a timespan."
+        },
+        {
+          "name": "output-token-variable-name",
+          "description": "Variable that receives the validated Jwt object."
+        }
+      ],
+      "oneOf": [
+        [
+          "header-name",
+          "query-parameter-name",
+          "token-value"
+        ]
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "openid-config",
+            "description": "OpenID configuration endpoint supplying signing keys and issuer.",
+            "attributes": [
+              {
+                "name": "url",
+                "required": true,
+                "description": "Address of the OpenID configuration document."
+              },
+              {
+                "name": "validate-connectivity",
+                "type": "bool",
+                "description": "Set false to skip the endpoint reachability check."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          },
+          {
+            "name": "issuer-signing-keys",
+            "description": "Keys used to verify token signatures; tried in turn.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "key",
+                  "description": "Signing key as Base64 text, certificate, or RSA modulus/exponent.",
+                  "attributes": [
+                    {
+                      "name": "id",
+                      "description": "Key identifier matched against the token kid claim."
+                    },
+                    {
+                      "name": "certificate-id",
+                      "description": "ID of a certificate stored in API Management."
+                    },
+                    {
+                      "name": "n",
+                      "description": "RSA public key modulus, Base64url encoded; pair with e."
+                    },
+                    {
+                      "name": "e",
+                      "description": "RSA public key exponent, Base64url encoded; pair with n."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "decryption-keys",
+            "description": "Keys used to decrypt encrypted tokens; tried in turn.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "key",
+                  "description": "Decryption key as Base64 text or certificate reference.",
+                  "attributes": [
+                    {
+                      "name": "certificate-id",
+                      "description": "ID of a certificate stored in API Management."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "audiences",
+            "description": "Acceptable audience claim values; any match passes.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "audience",
+                  "description": "One acceptable audience value.",
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "issuers",
+            "description": "Acceptable token issuers; any match passes.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "issuer",
+                  "description": "One acceptable issuer value.",
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "required-claims",
+            "description": "Claims that must appear in the token.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "claim",
+                  "description": "A claim that must be present, with acceptable values.",
+                  "attributes": [
+                    {
+                      "name": "name",
+                      "required": true,
+                      "description": "Claim name as it appears in the token."
+                    },
+                    {
+                      "name": "match",
+                      "enum": [
+                        "all",
+                        "any"
+                      ],
+                      "description": "Require all listed values or any one."
+                    },
+                    {
+                      "name": "separator",
+                      "description": "Character splitting a multi-valued claim."
+                    }
+                  ],
+                  "content": {
+                    "kind": "children",
+                    "children": [
+                      {
+                        "name": "value",
+                        "description": "One acceptable claim value.",
+                        "content": {
+                          "kind": "text"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "validate-client-certificate",
+      "description": "Checks the client certificate against validation rules and identity claims.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/validate-client-certificate-policy",
+      "category": "Authentication and authorization",
+      "attributes": [
+        {
+          "name": "validate-revocation",
+          "type": "bool",
+          "description": "Check the certificate against the online revocation list."
+        },
+        {
+          "name": "validate-trust",
+          "type": "bool",
+          "description": "Fail if the chain does not reach a trusted CA."
+        },
+        {
+          "name": "validate-not-before",
+          "type": "bool",
+          "description": "Check the not-before date against current time."
+        },
+        {
+          "name": "validate-not-after",
+          "type": "bool",
+          "description": "Check the expiry date against current time."
+        },
+        {
+          "name": "ignore-error",
+          "type": "bool",
+          "description": "Continue the pipeline instead of jumping to on-error."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "identities",
+            "description": "Up to ten acceptable certificate identities.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "identity",
+                  "description": "Claims a matching client certificate must have.",
+                  "max": 10,
+                  "attributes": [
+                    {
+                      "name": "thumbprint",
+                      "description": "Certificate SHA-1 thumbprint."
+                    },
+                    {
+                      "name": "serial-number",
+                      "description": "Certificate serial number."
+                    },
+                    {
+                      "name": "common-name",
+                      "description": "Certificate common name from the subject."
+                    },
+                    {
+                      "name": "subject",
+                      "description": "Full subject distinguished name."
+                    },
+                    {
+                      "name": "dns-name",
+                      "description": "DNS name from the subject alternative name."
+                    },
+                    {
+                      "name": "issuer-subject",
+                      "description": "Issuer distinguished name."
+                    },
+                    {
+                      "name": "issuer-thumbprint",
+                      "description": "Issuer SHA-1 thumbprint."
+                    },
+                    {
+                      "name": "issuer-certificate-id",
+                      "description": "Uploaded certificate representing the issuer public key."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "authentication-basic",
+      "description": "Authenticates to the backend with HTTP Basic credentials.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/authentication-basic-policy",
+      "category": "Authentication and authorization",
+      "attributes": [
+        {
+          "name": "username",
+          "required": true,
+          "expressions": true,
+          "description": "Basic credential user name."
+        },
+        {
+          "name": "password",
+          "required": true,
+          "expressions": true,
+          "description": "Basic credential password."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "authentication-certificate",
+      "description": "Authenticates to the backend with a client certificate.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/authentication-certificate-policy",
+      "category": "Authentication and authorization",
+      "attributes": [
+        {
+          "name": "thumbprint",
+          "expressions": true,
+          "description": "Thumbprint of the client certificate."
+        },
+        {
+          "name": "certificate-id",
+          "expressions": true,
+          "description": "Name of the certificate resource."
+        },
+        {
+          "name": "body",
+          "expressions": true,
+          "description": "Certificate bytes, when not using the certificate store."
+        },
+        {
+          "name": "password",
+          "expressions": true,
+          "description": "Password protecting a certificate supplied in body."
+        }
+      ],
+      "oneOf": [
+        [
+          "thumbprint",
+          "certificate-id",
+          "body"
+        ]
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "authentication-managed-identity",
+      "description": "Gets a token with a managed identity to call the backend.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy",
+      "category": "Authentication and authorization",
+      "attributes": [
+        {
+          "name": "resource",
+          "required": true,
+          "expressions": true,
+          "description": "Application ID of the target Entra-secured resource."
+        },
+        {
+          "name": "client-id",
+          "description": "User-assigned identity client ID; omit for system-assigned."
+        },
+        {
+          "name": "output-token-variable-name",
+          "description": "Variable that receives the token string."
+        },
+        {
+          "name": "ignore-error",
+          "type": "bool",
+          "description": "Keep running even if no token is obtained."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "llm-content-safety",
+      "description": "Screens LLM prompts or completions with Azure AI Content Safety.",
+      "sections": [
+        "inbound",
+        "outbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/llm-content-safety-policy",
+      "category": "Content validation",
+      "attributes": [
+        {
+          "name": "backend-id",
+          "required": true,
+          "expressions": true,
+          "description": "Backend pointing at the Content Safety service."
+        },
+        {
+          "name": "shield-prompt",
+          "expressions": true,
+          "type": "bool",
+          "description": "Also check content for user prompt attacks."
+        },
+        {
+          "name": "enforce-on-completions",
+          "expressions": true,
+          "type": "bool",
+          "description": "In inbound, also check model completions."
+        },
+        {
+          "name": "window-size",
+          "expressions": true,
+          "type": "int",
+          "description": "Characters per evaluation window; responses only."
+        },
+        {
+          "name": "window-overlap-size",
+          "expressions": true,
+          "type": "int",
+          "description": "Characters shared between consecutive windows."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "categories",
+            "description": "Harm categories that cause blocking when detected.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "output-type",
+                "expressions": true,
+                "enum": [
+                  "FourSeverityLevels",
+                  "EightSeverityLevels"
+                ],
+                "description": "Severity scale returned by the service."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "category",
+                  "description": "Blocking threshold for one harm category.",
+                  "attributes": [
+                    {
+                      "name": "name",
+                      "required": true,
+                      "expressions": true,
+                      "enum": [
+                        "Hate",
+                        "SelfHarm",
+                        "Sexual",
+                        "Violence"
+                      ],
+                      "description": "Harm category name."
+                    },
+                    {
+                      "name": "threshold",
+                      "required": true,
+                      "expressions": true,
+                      "type": "int",
+                      "description": "Severity from 0 to 7 at which content is blocked."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "blocklists",
+            "description": "Content Safety blocklists whose matches block the request.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "id",
+                  "description": "Identifier of one blocklist.",
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "validate-content",
+      "description": "Checks request or response body size and content against API schemas.",
+      "sections": [
+        "inbound",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/validate-content-policy",
+      "category": "Content validation",
+      "attributes": [
+        {
+          "name": "unspecified-content-type-action",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "ignore",
+            "prevent",
+            "detect"
+          ],
+          "description": "Action for content types absent from the schema."
+        },
+        {
+          "name": "max-size",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Body size limit in bytes, at most 4 MB."
+        },
+        {
+          "name": "size-exceeded-action",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "ignore",
+            "prevent",
+            "detect"
+          ],
+          "description": "Action when the body exceeds max-size."
+        },
+        {
+          "name": "errors-variable-name",
+          "description": "Variable that collects validation errors."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "content-type-map",
+            "description": "Maps incoming content types to ones used for validation.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "any-content-type-value",
+                "description": "Content type to validate as, whatever arrives."
+              },
+              {
+                "name": "missing-content-type-value",
+                "description": "Content type to use when none is supplied."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "type",
+                  "description": "Maps one incoming content type to a validation type.",
+                  "attributes": [
+                    {
+                      "name": "from",
+                      "description": "Known incoming content type to map."
+                    },
+                    {
+                      "name": "when",
+                      "expressions": true,
+                      "description": "Condition selecting incoming content types to map."
+                    },
+                    {
+                      "name": "to",
+                      "required": true,
+                      "description": "Content type to validate against."
+                    }
+                  ],
+                  "oneOf": [
+                    [
+                      "from",
+                      "when"
+                    ]
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "content",
+            "description": "Validation rule for a content type, with its action.",
+            "attributes": [
+              {
+                "name": "type",
+                "description": "Content type this rule covers; empty means all."
+              },
+              {
+                "name": "validate-as",
+                "required": true,
+                "enum": [
+                  "json",
+                  "xml",
+                  "soap"
+                ],
+                "description": "Validation engine to apply."
+              },
+              {
+                "name": "schema-id",
+                "description": "Schema added to the instance; defaults to API schema."
+              },
+              {
+                "name": "schema-ref",
+                "description": "Local JSON reference path inside the schema."
+              },
+              {
+                "name": "action",
+                "enum": [
+                  "ignore",
+                  "prevent",
+                  "detect"
+                ],
+                "description": "Action when the body fails validation."
+              },
+              {
+                "name": "allow-additional-properties",
+                "type": "bool",
+                "description": "Override the JSON schema additionalProperties setting."
+              },
+              {
+                "name": "case-insensitive-property-names",
+                "type": "bool",
+                "description": "Match JSON property names regardless of case."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "validate-graphql-request",
+      "description": "Validates and authorizes requests sent to a GraphQL API.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/validate-graphql-request-policy",
+      "category": "Content validation",
+      "attributes": [
+        {
+          "name": "error-variable-name",
+          "expressions": true,
+          "description": "Variable that collects validation errors."
+        },
+        {
+          "name": "max-size",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Request payload limit in bytes, up to 100 KB."
+        },
+        {
+          "name": "max-depth",
+          "expressions": true,
+          "type": "int",
+          "description": "Deepest query nesting allowed."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "authorize",
+            "description": "Authorization rules for GraphQL query paths.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "rule",
+                  "description": "Authorization rule for one query path.",
+                  "attributes": [
+                    {
+                      "name": "path",
+                      "required": true,
+                      "description": "Query path in /type/field form."
+                    },
+                    {
+                      "name": "action",
+                      "expressions": true,
+                      "enum": [
+                        "allow",
+                        "remove",
+                        "reject",
+                        "ignore"
+                      ],
+                      "description": "What to do when the rule matches."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "validate-odata-request",
+      "description": "Checks that a request to an OData API conforms to the OData spec.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/validate-odata-request-policy",
+      "category": "Content validation",
+      "attributes": [
+        {
+          "name": "error-variable-name",
+          "description": "Variable that collects validation errors."
+        },
+        {
+          "name": "default-odata-version",
+          "description": "Version assumed when OData-Version header is missing."
+        },
+        {
+          "name": "min-odata-version",
+          "description": "Lowest OData-Version header value accepted."
+        },
+        {
+          "name": "max-odata-version",
+          "description": "Highest OData-Version header value accepted."
+        },
+        {
+          "name": "max-size",
+          "type": "int",
+          "description": "Request payload limit in bytes."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "validate-parameters",
+      "description": "Checks request header, query, and path parameters against the API schema.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/validate-parameters-policy",
+      "category": "Content validation",
+      "attributes": [
+        {
+          "name": "specified-parameter-action",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "ignore",
+            "prevent",
+            "detect"
+          ],
+          "description": "Action for parameters defined in the schema."
+        },
+        {
+          "name": "unspecified-parameter-action",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "ignore",
+            "prevent",
+            "detect"
+          ],
+          "description": "Action for parameters missing from the schema."
+        },
+        {
+          "name": "errors-variable-name",
+          "description": "Variable that collects validation errors."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "headers",
+            "description": "Overrides validation actions for named request headers.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "specified-parameter-action",
+                "expressions": true,
+                "enum": [
+                  "ignore",
+                  "prevent",
+                  "detect"
+                ],
+                "description": "Overrides the action for schema-defined parameters."
+              },
+              {
+                "name": "unspecified-parameter-action",
+                "expressions": true,
+                "enum": [
+                  "ignore",
+                  "prevent",
+                  "detect"
+                ],
+                "description": "Overrides the action for parameters not in the schema."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "parameter",
+                  "description": "Overrides the validation action for one named parameter.",
+                  "attributes": [
+                    {
+                      "name": "name",
+                      "required": true,
+                      "description": "Parameter name."
+                    },
+                    {
+                      "name": "action",
+                      "enum": [
+                        "ignore",
+                        "prevent",
+                        "detect"
+                      ],
+                      "description": "Action to apply for this parameter."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "query",
+            "description": "Overrides validation actions for named query parameters.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "specified-parameter-action",
+                "expressions": true,
+                "enum": [
+                  "ignore",
+                  "prevent",
+                  "detect"
+                ],
+                "description": "Overrides the action for schema-defined parameters."
+              },
+              {
+                "name": "unspecified-parameter-action",
+                "expressions": true,
+                "enum": [
+                  "ignore",
+                  "prevent",
+                  "detect"
+                ],
+                "description": "Overrides the action for parameters not in the schema."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "parameter",
+                  "description": "Overrides the validation action for one named parameter.",
+                  "attributes": [
+                    {
+                      "name": "name",
+                      "required": true,
+                      "description": "Parameter name."
+                    },
+                    {
+                      "name": "action",
+                      "enum": [
+                        "ignore",
+                        "prevent",
+                        "detect"
+                      ],
+                      "description": "Action to apply for this parameter."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "description": "Overrides validation actions for named path parameters.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "specified-parameter-action",
+                "expressions": true,
+                "enum": [
+                  "ignore",
+                  "prevent",
+                  "detect"
+                ],
+                "description": "Overrides the action for schema-defined parameters."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "parameter",
+                  "description": "Overrides the validation action for one named parameter.",
+                  "attributes": [
+                    {
+                      "name": "name",
+                      "required": true,
+                      "description": "Parameter name."
+                    },
+                    {
+                      "name": "action",
+                      "enum": [
+                        "ignore",
+                        "prevent",
+                        "detect"
+                      ],
+                      "description": "Action to apply for this parameter."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "validate-headers",
+      "description": "Checks response headers against the API schema.",
+      "sections": [
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/validate-headers-policy",
+      "category": "Content validation",
+      "attributes": [
+        {
+          "name": "specified-header-action",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "ignore",
+            "prevent",
+            "detect"
+          ],
+          "description": "Action for headers defined in the schema."
+        },
+        {
+          "name": "unspecified-header-action",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "ignore",
+            "prevent",
+            "detect"
+          ],
+          "description": "Action for headers missing from the schema."
+        },
+        {
+          "name": "errors-variable-name",
+          "description": "Variable that collects validation errors."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "header",
+            "description": "Overrides the validation action for one named header.",
+            "attributes": [
+              {
+                "name": "name",
+                "required": true,
+                "description": "Header name."
+              },
+              {
+                "name": "action",
+                "enum": [
+                  "ignore",
+                  "prevent",
+                  "detect"
+                ],
+                "description": "Action to apply for this header."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "validate-status-code",
+      "description": "Checks response status codes against the API schema.",
+      "sections": [
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/validate-status-code-policy",
+      "category": "Content validation",
+      "attributes": [
+        {
+          "name": "unspecified-status-code-action",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "ignore",
+            "prevent",
+            "detect"
+          ],
+          "description": "Action for status codes missing from the schema."
+        },
+        {
+          "name": "errors-variable-name",
+          "description": "Variable that collects validation errors."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "status-code",
+            "description": "Overrides the validation action for one status code.",
+            "attributes": [
+              {
+                "name": "code",
+                "required": true,
+                "type": "int",
+                "description": "Status code whose action is overridden."
+              },
+              {
+                "name": "action",
+                "required": true,
+                "enum": [
+                  "ignore",
+                  "prevent",
+                  "detect"
+                ],
+                "description": "Action to apply for this status code."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "forward-request",
+      "description": "Sends the current request on to the backend service.",
+      "sections": [
+        "backend"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/forward-request-policy",
+      "category": "Routing",
+      "attributes": [
+        {
+          "name": "http-version",
+          "enum": [
+            "1",
+            "2or1",
+            "2"
+          ],
+          "description": "HTTP version used toward the backend."
+        },
+        {
+          "name": "timeout",
+          "expressions": true,
+          "type": "int",
+          "description": "Seconds to wait for backend response headers."
+        },
+        {
+          "name": "timeout-ms",
+          "expressions": true,
+          "type": "int",
+          "description": "Milliseconds to wait for backend headers; excludes timeout."
+        },
+        {
+          "name": "continue-timeout",
+          "expressions": true,
+          "type": "int",
+          "description": "Seconds to wait for a 100 Continue reply."
+        },
+        {
+          "name": "follow-redirects",
+          "expressions": true,
+          "type": "bool",
+          "description": "Follow backend redirects instead of returning them."
+        },
+        {
+          "name": "buffer-request-body",
+          "type": "bool",
+          "description": "Buffer the request body so retries can resend it."
+        },
+        {
+          "name": "buffer-response",
+          "type": "bool",
+          "description": "Buffer chunked responses; set false for streaming."
+        },
+        {
+          "name": "fail-on-error-status-code",
+          "type": "bool",
+          "description": "Enter on-error for backend 4xx and 5xx codes."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "set-backend-service",
+      "description": "Points the request at another backend URL, backend entity, or Dapr service.",
+      "sections": [
+        "inbound",
+        "backend"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/set-backend-service-policy",
+      "category": "Routing",
+      "attributes": [
+        {
+          "name": "base-url",
+          "expressions": true,
+          "description": "Replacement backend base URL."
+        },
+        {
+          "name": "backend-id",
+          "expressions": true,
+          "description": "Backend entity name, or \"dapr\" for Dapr invocation."
+        },
+        {
+          "name": "sf-resolve-condition",
+          "expressions": true,
+          "type": "bool",
+          "description": "Service Fabric: condition to retry with fresh resolution."
+        },
+        {
+          "name": "sf-service-instance-name",
+          "expressions": true,
+          "description": "Service Fabric: service instance to target at runtime."
+        },
+        {
+          "name": "sf-partition-key",
+          "expressions": true,
+          "description": "Service Fabric: partition key of the service."
+        },
+        {
+          "name": "sf-replica-type",
+          "expressions": true,
+          "enum": [
+            "primary",
+            "secondary"
+          ],
+          "description": "Service Fabric: route to primary or secondary replica."
+        },
+        {
+          "name": "sf-listener-name",
+          "expressions": true,
+          "description": "Service Fabric: listener to use when several exist."
+        },
+        {
+          "name": "dapr-app-id",
+          "expressions": true,
+          "description": "Dapr: target microservice app ID."
+        },
+        {
+          "name": "dapr-method",
+          "expressions": true,
+          "description": "Dapr: method name or URL to invoke."
+        },
+        {
+          "name": "dapr-namespace",
+          "expressions": true,
+          "description": "Dapr: namespace hosting the target microservice."
+        }
+      ],
+      "oneOf": [
+        [
+          "base-url",
+          "backend-id"
+        ]
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "proxy",
+      "description": "Routes forwarded requests through an HTTP proxy.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/proxy-policy",
+      "category": "Routing",
+      "attributes": [
+        {
+          "name": "url",
+          "required": true,
+          "expressions": true,
+          "description": "Proxy address as http://host:port."
+        },
+        {
+          "name": "username",
+          "expressions": true,
+          "description": "User name for proxy authentication."
+        },
+        {
+          "name": "password",
+          "expressions": true,
+          "description": "Password for proxy authentication."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "cache-lookup",
+      "description": "Returns a cached response when a valid entry exists.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/cache-lookup-policy",
+      "category": "Caching",
+      "attributes": [
+        {
+          "name": "allow-private-response-caching",
+          "expressions": true,
+          "type": "bool",
+          "description": "Allow caching requests that carry an Authorization header."
+        },
+        {
+          "name": "caching-type",
+          "enum": [
+            "prefer-external",
+            "external",
+            "internal"
+          ],
+          "description": "Which cache to use: internal, external, or prefer external."
+        },
+        {
+          "name": "downstream-caching-type",
+          "expressions": true,
+          "enum": [
+            "none",
+            "private",
+            "public"
+          ],
+          "description": "Downstream caching permitted via Cache-Control."
+        },
+        {
+          "name": "must-revalidate",
+          "expressions": true,
+          "type": "bool",
+          "description": "Add must-revalidate when downstream caching is on."
+        },
+        {
+          "name": "vary-by-developer",
+          "required": true,
+          "expressions": true,
+          "type": "bool",
+          "description": "Keep separate cache entries per developer account."
+        },
+        {
+          "name": "vary-by-developer-groups",
+          "required": true,
+          "expressions": true,
+          "type": "bool",
+          "description": "Keep separate cache entries per user group."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "vary-by-header",
+            "description": "Header whose value partitions cached responses.",
+            "content": {
+              "kind": "text"
+            }
+          },
+          {
+            "name": "vary-by-query-parameter",
+            "description": "Query parameter whose value partitions cached responses.",
+            "content": {
+              "kind": "text"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "cache-store",
+      "description": "Stores the response in cache using the configured settings.",
+      "sections": [
+        "outbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/cache-store-policy",
+      "category": "Caching",
+      "attributes": [
+        {
+          "name": "duration",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Cache entry lifetime in seconds."
+        },
+        {
+          "name": "cache-response",
+          "expressions": true,
+          "type": "bool",
+          "description": "Cache this response even if it is not 200."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "cache-lookup-value",
+      "description": "Reads a cached item by key into a context variable.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/cache-lookup-value-policy",
+      "category": "Caching",
+      "attributes": [
+        {
+          "name": "caching-type",
+          "enum": [
+            "prefer-external",
+            "external",
+            "internal"
+          ],
+          "description": "Which cache to use: internal, external, or prefer external."
+        },
+        {
+          "name": "default-value",
+          "expressions": true,
+          "description": "Value assigned to the variable on a cache miss."
+        },
+        {
+          "name": "key",
+          "required": true,
+          "expressions": true,
+          "description": "Cache key to look up."
+        },
+        {
+          "name": "variable-name",
+          "required": true,
+          "description": "Variable that receives the cached value."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "cache-store-value",
+      "description": "Writes an item to the cache under a key.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/cache-store-value-policy",
+      "category": "Caching",
+      "attributes": [
+        {
+          "name": "caching-type",
+          "enum": [
+            "prefer-external",
+            "external",
+            "internal"
+          ],
+          "description": "Which cache to use: internal, external, or prefer external."
+        },
+        {
+          "name": "duration",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Seconds the value stays cached."
+        },
+        {
+          "name": "key",
+          "required": true,
+          "expressions": true,
+          "description": "Cache key to store under."
+        },
+        {
+          "name": "value",
+          "required": true,
+          "expressions": true,
+          "description": "Value to cache."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "cache-remove-value",
+      "description": "Deletes a cached item by key.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/cache-remove-value-policy",
+      "category": "Caching",
+      "attributes": [
+        {
+          "name": "caching-type",
+          "enum": [
+            "prefer-external",
+            "external",
+            "internal"
+          ],
+          "description": "Which cache to use: internal, external, or prefer external."
+        },
+        {
+          "name": "key",
+          "required": true,
+          "expressions": true,
+          "description": "Cache key to remove."
+        },
+        {
+          "name": "fail-on-cache-removal-error",
+          "expressions": true,
+          "type": "bool",
+          "description": "Fail the request if removal fails."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "llm-semantic-cache-lookup",
+      "description": "Returns a cached LLM response for a semantically similar prompt.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/llm-semantic-cache-lookup-policy",
+      "category": "Caching",
+      "attributes": [
+        {
+          "name": "score-threshold",
+          "required": true,
+          "description": "Similarity cutoff from 0.0 to 1.0 for a hit."
+        },
+        {
+          "name": "embeddings-backend-id",
+          "required": true,
+          "description": "Backend used for the embeddings API call."
+        },
+        {
+          "name": "embeddings-backend-auth",
+          "required": true,
+          "enum": [
+            "system-assigned"
+          ],
+          "description": "Auth for the embeddings backend; must be system-assigned."
+        },
+        {
+          "name": "ignore-system-messages",
+          "type": "bool",
+          "description": "Drop system messages before comparing prompts."
+        },
+        {
+          "name": "max-message-count",
+          "type": "int",
+          "description": "Skip caching once dialog messages exceed this count."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "vary-by",
+            "description": "Expression whose value partitions the cache.",
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "llm-semantic-cache-store",
+      "description": "Caches LLM responses for later semantic lookup.",
+      "sections": [
+        "outbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/llm-semantic-cache-store-policy",
+      "category": "Caching",
+      "attributes": [
+        {
+          "name": "duration",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Cache entry lifetime in seconds."
+        },
+        {
+          "name": "cache-response",
+          "expressions": true,
+          "type": "bool",
+          "description": "Cache this response even if it is not 200."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "set-method",
+      "description": "Changes the HTTP method; the element text is the method.",
+      "sections": [
+        "inbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/set-method-policy",
+      "category": "Transformation",
+      "content": {
+        "kind": "text",
+        "expressions": true
+      }
+    },
+    {
+      "name": "set-status",
+      "description": "Sets the HTTP status code and reason phrase.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/set-status-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "code",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Status code sent back to the caller."
+        },
+        {
+          "name": "reason",
+          "required": true,
+          "expressions": true,
+          "description": "Reason phrase for the status code."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "set-variable",
+      "description": "Stores a value in a named context variable.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/set-variable-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "name",
+          "required": true,
+          "description": "Variable name."
+        },
+        {
+          "name": "value",
+          "required": true,
+          "expressions": true,
+          "description": "Literal or expression to store."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "set-body",
+      "description": "Replaces the request or response body with the element text.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/set-body-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "template",
+          "enum": [
+            "liquid"
+          ],
+          "description": "Templating engine for the body text."
+        },
+        {
+          "name": "xsi-nil",
+          "enum": [
+            "blank",
+            "null"
+          ],
+          "description": "How xsi:nil elements are rendered."
+        },
+        {
+          "name": "parse-date",
+          "type": "bool",
+          "description": "Convert date-like strings to DateTime values."
+        }
+      ],
+      "content": {
+        "kind": "text",
+        "expressions": true
+      }
+    },
+    {
+      "name": "set-header",
+      "description": "Adds, replaces, appends to, or removes an HTTP header.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/set-header-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "name",
+          "required": true,
+          "expressions": true,
+          "description": "Header to set."
+        },
+        {
+          "name": "exists-action",
+          "expressions": true,
+          "enum": [
+            "override",
+            "skip",
+            "append",
+            "delete"
+          ],
+          "description": "Behavior when the header is already present."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "value",
+            "description": "A header value; repeat for multiple values.",
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "set-query-parameter",
+      "description": "Adds, replaces, appends to, or removes a query string parameter.",
+      "sections": [
+        "inbound",
+        "backend"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/set-query-parameter-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "name",
+          "required": true,
+          "expressions": true,
+          "description": "Query parameter to set."
+        },
+        {
+          "name": "exists-action",
+          "expressions": true,
+          "enum": [
+            "override",
+            "skip",
+            "append",
+            "delete"
+          ],
+          "description": "Behavior when the parameter is already present."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "value",
+            "description": "A parameter value; repeat for multiple values.",
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "rewrite-uri",
+      "description": "Rewrites the request URL from its public form to the backend form.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/rewrite-uri-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "template",
+          "required": true,
+          "expressions": true,
+          "description": "Backend URL template including query string."
+        },
+        {
+          "name": "copy-unmatched-params",
+          "expressions": true,
+          "type": "bool",
+          "description": "Carry over query parameters not in the template."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "json-to-xml",
+      "description": "Converts a JSON body to XML.",
+      "sections": [
+        "inbound",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/json-to-xml-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "apply",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "always",
+            "content-type-json"
+          ],
+          "description": "Convert always or only for JSON content types."
+        },
+        {
+          "name": "consider-accept-header",
+          "expressions": true,
+          "type": "bool",
+          "description": "Convert only if the Accept header asks for XML."
+        },
+        {
+          "name": "parse-date",
+          "type": "bool",
+          "description": "Set false to copy date values unchanged."
+        },
+        {
+          "name": "namespace-separator",
+          "expressions": true,
+          "description": "Character separating namespace prefixes."
+        },
+        {
+          "name": "namespace-prefix",
+          "expressions": true,
+          "description": "Property prefix marking namespace declarations."
+        },
+        {
+          "name": "attribute-block-name",
+          "expressions": true,
+          "description": "Object whose properties become XML attributes."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "xml-to-json",
+      "description": "Converts an XML body to JSON.",
+      "sections": [
+        "inbound",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/xml-to-json-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "kind",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "javascript-friendly",
+            "direct"
+          ],
+          "description": "JSON shape: JavaScript-friendly or mirroring the XML."
+        },
+        {
+          "name": "apply",
+          "required": true,
+          "expressions": true,
+          "enum": [
+            "always",
+            "content-type-xml"
+          ],
+          "description": "Convert always or only for XML content types."
+        },
+        {
+          "name": "consider-accept-header",
+          "expressions": true,
+          "type": "bool",
+          "description": "Convert only if the Accept header asks for JSON."
+        },
+        {
+          "name": "always-array-child-elements",
+          "expressions": true,
+          "type": "bool",
+          "description": "Always render child elements as JSON arrays."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "find-and-replace",
+      "description": "Replaces a substring in the request or response body.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/find-and-replace-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "from",
+          "required": true,
+          "expressions": true,
+          "description": "Text to search for."
+        },
+        {
+          "name": "to",
+          "required": true,
+          "expressions": true,
+          "description": "Replacement text; empty removes matches."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "redirect-content-urls",
+      "description": "Rewrites body links so they point through the gateway.",
+      "sections": [
+        "inbound",
+        "outbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/redirect-content-urls-policy",
+      "category": "Transformation",
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "xsl-transform",
+      "description": "Transforms an XML body with an XSLT stylesheet.",
+      "sections": [
+        "inbound",
+        "outbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/xsl-transform-policy",
+      "category": "Transformation",
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "parameter",
+            "description": "Named variable passed into the transform.",
+            "attributes": [
+              {
+                "name": "parameter-name",
+                "required": true,
+                "description": "Name of the XSLT parameter."
+              }
+            ],
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          },
+          {
+            "name": "xsl:stylesheet",
+            "description": "Root XSLT stylesheet element.",
+            "min": 1,
+            "max": 1,
+            "content": {
+              "kind": "any"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "return-response",
+      "description": "Stops the pipeline and sends a response straight to the caller.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/return-response-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "response-variable-name",
+          "description": "Context variable holding a Response object to return."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "set-status",
+            "description": "Sets the HTTP status code and reason phrase.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "code",
+                "required": true,
+                "expressions": true,
+                "type": "int",
+                "description": "Status code sent back to the caller."
+              },
+              {
+                "name": "reason",
+                "required": true,
+                "expressions": true,
+                "description": "Reason phrase for the status code."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          },
+          {
+            "name": "set-header",
+            "description": "Adds, replaces, appends to, or removes an HTTP header.",
+            "attributes": [
+              {
+                "name": "name",
+                "required": true,
+                "expressions": true,
+                "description": "Header to set."
+              },
+              {
+                "name": "exists-action",
+                "expressions": true,
+                "enum": [
+                  "override",
+                  "skip",
+                  "append",
+                  "delete"
+                ],
+                "description": "Behavior when the header is already present."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "value",
+                  "description": "A header value; repeat for multiple values.",
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "set-body",
+            "description": "Replaces the request or response body with the element text.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "template",
+                "enum": [
+                  "liquid"
+                ],
+                "description": "Templating engine for the body text."
+              },
+              {
+                "name": "xsi-nil",
+                "enum": [
+                  "blank",
+                  "null"
+                ],
+                "description": "How xsi:nil elements are rendered."
+              },
+              {
+                "name": "parse-date",
+                "type": "bool",
+                "description": "Convert date-like strings to DateTime values."
+              }
+            ],
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "mock-response",
+      "description": "Stops the pipeline and returns a response built from API samples.",
+      "sections": [
+        "inbound",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/mock-response-policy",
+      "category": "Transformation",
+      "attributes": [
+        {
+          "name": "status-code",
+          "type": "int",
+          "description": "Response status code; selects matching example or schema."
+        },
+        {
+          "name": "content-type",
+          "description": "Response Content-Type; selects matching example or schema."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "cross-domain",
+      "description": "Exposes the API to Flash and Silverlight clients via an Adobe policy.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/cross-domain-policy",
+      "category": "Cross-domain",
+      "content": {
+        "kind": "any"
+      }
+    },
+    {
+      "name": "cors",
+      "description": "Adds CORS support so browser clients can call cross-origin.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/cors-policy",
+      "category": "Cross-domain",
+      "attributes": [
+        {
+          "name": "allow-credentials",
+          "expressions": true,
+          "type": "bool",
+          "description": "Value for Access-Control-Allow-Credentials."
+        },
+        {
+          "name": "terminate-unmatched-request",
+          "expressions": true,
+          "type": "bool",
+          "description": "End unmatched cross-origin requests with an empty 200."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "allowed-origins",
+            "description": "Origins permitted to make cross-domain calls.",
+            "min": 1,
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "origin",
+                  "description": "An origin URI, or * for any.",
+                  "min": 1,
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "allowed-methods",
+            "description": "HTTP methods permitted beyond GET and POST.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "preflight-result-max-age",
+                "expressions": true,
+                "type": "int",
+                "description": "Seconds browsers may cache the preflight result."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "method",
+                  "description": "An HTTP verb, or * for all.",
+                  "min": 1,
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "allowed-headers",
+            "description": "Request headers permitted on cross-origin calls.",
+            "min": 1,
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "header",
+                  "description": "A header name, or * for all.",
+                  "min": 1,
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "expose-headers",
+            "description": "Response headers the client may read.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "header",
+                  "description": "A header name, or * for all.",
+                  "min": 1,
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "jsonp",
+      "description": "Wraps responses in a callback for JSONP clients.",
+      "sections": [
+        "outbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/jsonp-policy",
+      "category": "Cross-domain",
+      "attributes": [
+        {
+          "name": "callback-parameter-name",
+          "required": true,
+          "expressions": true,
+          "description": "Query parameter naming the JavaScript callback function."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "send-request",
+      "description": "Calls a URL and stores the response in a variable.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/send-request-policy",
+      "category": "Integration and external communication",
+      "attributes": [
+        {
+          "name": "mode",
+          "expressions": true,
+          "enum": [
+            "new",
+            "copy"
+          ],
+          "description": "Start a new request or copy the current one."
+        },
+        {
+          "name": "response-variable-name",
+          "required": true,
+          "expressions": true,
+          "description": "Variable that receives the response object."
+        },
+        {
+          "name": "timeout",
+          "expressions": true,
+          "type": "int",
+          "description": "Seconds before the call fails."
+        },
+        {
+          "name": "ignore-error",
+          "type": "bool",
+          "description": "On error, continue with a null response variable."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "set-url",
+            "description": "Target URL of the request.",
+            "max": 1,
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          },
+          {
+            "name": "set-method",
+            "description": "Changes the HTTP method; the element text is the method.",
+            "max": 1,
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          },
+          {
+            "name": "set-header",
+            "description": "Adds, replaces, appends to, or removes an HTTP header.",
+            "attributes": [
+              {
+                "name": "name",
+                "required": true,
+                "expressions": true,
+                "description": "Header to set."
+              },
+              {
+                "name": "exists-action",
+                "expressions": true,
+                "enum": [
+                  "override",
+                  "skip",
+                  "append",
+                  "delete"
+                ],
+                "description": "Behavior when the header is already present."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "value",
+                  "description": "A header value; repeat for multiple values.",
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "set-body",
+            "description": "Replaces the request or response body with the element text.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "template",
+                "enum": [
+                  "liquid"
+                ],
+                "description": "Templating engine for the body text."
+              },
+              {
+                "name": "xsi-nil",
+                "enum": [
+                  "blank",
+                  "null"
+                ],
+                "description": "How xsi:nil elements are rendered."
+              },
+              {
+                "name": "parse-date",
+                "type": "bool",
+                "description": "Convert date-like strings to DateTime values."
+              }
+            ],
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          },
+          {
+            "name": "authentication-certificate",
+            "description": "Authenticates to the backend with a client certificate.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "thumbprint",
+                "expressions": true,
+                "description": "Thumbprint of the client certificate."
+              },
+              {
+                "name": "certificate-id",
+                "expressions": true,
+                "description": "Name of the certificate resource."
+              },
+              {
+                "name": "body",
+                "expressions": true,
+                "description": "Certificate bytes, when not using the certificate store."
+              },
+              {
+                "name": "password",
+                "expressions": true,
+                "description": "Password protecting a certificate supplied in body."
+              }
+            ],
+            "oneOf": [
+              [
+                "thumbprint",
+                "certificate-id",
+                "body"
+              ]
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          },
+          {
+            "name": "authentication-managed-identity",
+            "description": "Gets a token with a managed identity to call the backend.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "resource",
+                "required": true,
+                "expressions": true,
+                "description": "Application ID of the target Entra-secured resource."
+              },
+              {
+                "name": "client-id",
+                "description": "User-assigned identity client ID; omit for system-assigned."
+              },
+              {
+                "name": "output-token-variable-name",
+                "description": "Variable that receives the token string."
+              },
+              {
+                "name": "ignore-error",
+                "type": "bool",
+                "description": "Keep running even if no token is obtained."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          },
+          {
+            "name": "proxy",
+            "description": "Routes forwarded requests through an HTTP proxy.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "url",
+                "required": true,
+                "expressions": true,
+                "description": "Proxy address as http://host:port."
+              },
+              {
+                "name": "username",
+                "expressions": true,
+                "description": "User name for proxy authentication."
+              },
+              {
+                "name": "password",
+                "expressions": true,
+                "description": "Password for proxy authentication."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "send-one-way-request",
+      "description": "Calls a URL without waiting for the response.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/send-one-way-request-policy",
+      "category": "Integration and external communication",
+      "attributes": [
+        {
+          "name": "mode",
+          "expressions": true,
+          "enum": [
+            "new",
+            "copy"
+          ],
+          "description": "Start a new request or copy the current one."
+        },
+        {
+          "name": "timeout",
+          "expressions": true,
+          "type": "int",
+          "description": "Seconds before the call fails."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "set-url",
+            "description": "Target URL of the request.",
+            "max": 1,
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          },
+          {
+            "name": "set-method",
+            "description": "Changes the HTTP method; the element text is the method.",
+            "max": 1,
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          },
+          {
+            "name": "set-header",
+            "description": "Adds, replaces, appends to, or removes an HTTP header.",
+            "attributes": [
+              {
+                "name": "name",
+                "required": true,
+                "expressions": true,
+                "description": "Header to set."
+              },
+              {
+                "name": "exists-action",
+                "expressions": true,
+                "enum": [
+                  "override",
+                  "skip",
+                  "append",
+                  "delete"
+                ],
+                "description": "Behavior when the header is already present."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "value",
+                  "description": "A header value; repeat for multiple values.",
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "set-body",
+            "description": "Replaces the request or response body with the element text.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "template",
+                "enum": [
+                  "liquid"
+                ],
+                "description": "Templating engine for the body text."
+              },
+              {
+                "name": "xsi-nil",
+                "enum": [
+                  "blank",
+                  "null"
+                ],
+                "description": "How xsi:nil elements are rendered."
+              },
+              {
+                "name": "parse-date",
+                "type": "bool",
+                "description": "Convert date-like strings to DateTime values."
+              }
+            ],
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          },
+          {
+            "name": "authentication-certificate",
+            "description": "Authenticates to the backend with a client certificate.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "thumbprint",
+                "expressions": true,
+                "description": "Thumbprint of the client certificate."
+              },
+              {
+                "name": "certificate-id",
+                "expressions": true,
+                "description": "Name of the certificate resource."
+              },
+              {
+                "name": "body",
+                "expressions": true,
+                "description": "Certificate bytes, when not using the certificate store."
+              },
+              {
+                "name": "password",
+                "expressions": true,
+                "description": "Password protecting a certificate supplied in body."
+              }
+            ],
+            "oneOf": [
+              [
+                "thumbprint",
+                "certificate-id",
+                "body"
+              ]
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          },
+          {
+            "name": "authentication-managed-identity",
+            "description": "Gets a token with a managed identity to call the backend.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "resource",
+                "required": true,
+                "expressions": true,
+                "description": "Application ID of the target Entra-secured resource."
+              },
+              {
+                "name": "client-id",
+                "description": "User-assigned identity client ID; omit for system-assigned."
+              },
+              {
+                "name": "output-token-variable-name",
+                "description": "Variable that receives the token string."
+              },
+              {
+                "name": "ignore-error",
+                "type": "bool",
+                "description": "Keep running even if no token is obtained."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          },
+          {
+            "name": "proxy",
+            "description": "Routes forwarded requests through an HTTP proxy.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "url",
+                "required": true,
+                "expressions": true,
+                "description": "Proxy address as http://host:port."
+              },
+              {
+                "name": "username",
+                "expressions": true,
+                "description": "User name for proxy authentication."
+              },
+              {
+                "name": "password",
+                "expressions": true,
+                "description": "Password for proxy authentication."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "log-to-eventhub",
+      "description": "Sends the element text as a message to an Event Hubs logger.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/log-to-eventhub-policy",
+      "category": "Integration and external communication",
+      "attributes": [
+        {
+          "name": "logger-id",
+          "required": true,
+          "description": "Logger entity registered in API Management."
+        },
+        {
+          "name": "partition-id",
+          "type": "int",
+          "description": "Partition index to send to; excludes partition-key."
+        },
+        {
+          "name": "partition-key",
+          "expressions": true,
+          "description": "Partition assignment key; excludes partition-id."
+        }
+      ],
+      "content": {
+        "kind": "text",
+        "expressions": true
+      }
+    },
+    {
+      "name": "send-service-bus-message",
+      "description": "Posts a message to a Service Bus queue or topic.",
+      "sections": [
+        "inbound",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/send-service-bus-message-policy",
+      "category": "Integration and external communication",
+      "attributes": [
+        {
+          "name": "queue-name",
+          "expressions": true,
+          "description": "Target Service Bus queue."
+        },
+        {
+          "name": "topic-name",
+          "expressions": true,
+          "description": "Target Service Bus topic."
+        },
+        {
+          "name": "namespace",
+          "expressions": true,
+          "description": "Fully qualified Service Bus namespace."
+        },
+        {
+          "name": "client-id",
+          "expressions": true,
+          "description": "User-assigned identity client ID; default is system-assigned."
+        },
+        {
+          "name": "message-id",
+          "expressions": true,
+          "description": "Message GUID; generated when omitted."
+        },
+        {
+          "name": "session-id",
+          "expressions": true,
+          "description": "Session GUID grouping related messages."
+        },
+        {
+          "name": "time-to-live",
+          "description": "Message lifetime as a TimeSpan, e.g. 00:10:00."
+        },
+        {
+          "name": "response-variable-name",
+          "description": "Variable that receives send operation details."
+        },
+        {
+          "name": "ignore-error",
+          "type": "bool",
+          "description": "Continue the pipeline when sending fails."
+        }
+      ],
+      "oneOf": [
+        [
+          "queue-name",
+          "topic-name"
+        ]
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "message-properties",
+            "description": "Metadata name/value pairs sent with the message.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "message-property",
+                  "description": "One metadata property; text is the value.",
+                  "attributes": [
+                    {
+                      "name": "name",
+                      "required": true,
+                      "description": "Property name."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "payload",
+            "description": "Message content to send.",
+            "min": 1,
+            "max": 1,
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "publish-to-dapr",
+      "description": "Publishes the element text to a Dapr pub/sub topic.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/publish-to-dapr-policy",
+      "category": "Integration and external communication",
+      "attributes": [
+        {
+          "name": "pubsub-name",
+          "expressions": true,
+          "description": "Dapr pub/sub component; else put it in topic."
+        },
+        {
+          "name": "topic",
+          "required": true,
+          "expressions": true,
+          "description": "Topic name, optionally as pubsub-name/topic-name."
+        },
+        {
+          "name": "ignore-error",
+          "type": "bool",
+          "description": "Skip on-error when Dapr returns an error."
+        },
+        {
+          "name": "response-variable-name",
+          "description": "Variable that receives the Dapr response."
+        },
+        {
+          "name": "timeout",
+          "expressions": true,
+          "type": "int",
+          "description": "Seconds to wait for Dapr, 1 to 240."
+        },
+        {
+          "name": "template",
+          "enum": [
+            "Liquid"
+          ],
+          "description": "Templating engine for the message."
+        },
+        {
+          "name": "content-type",
+          "enum": [
+            "application/json"
+          ],
+          "description": "Message content type."
+        }
+      ],
+      "content": {
+        "kind": "text",
+        "expressions": true
+      }
+    },
+    {
+      "name": "invoke-dapr-binding",
+      "description": "Triggers a Dapr output binding to reach an external system.",
+      "sections": [
+        "inbound",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/invoke-dapr-binding-policy",
+      "category": "Integration and external communication",
+      "attributes": [
+        {
+          "name": "name",
+          "required": true,
+          "expressions": true,
+          "description": "Dapr binding name to invoke."
+        },
+        {
+          "name": "operation",
+          "description": "Binding-specific operation name."
+        },
+        {
+          "name": "ignore-error",
+          "type": "bool",
+          "description": "Skip on-error when Dapr returns an error."
+        },
+        {
+          "name": "response-variable-name",
+          "description": "Variable that receives the Dapr response."
+        },
+        {
+          "name": "timeout",
+          "expressions": true,
+          "type": "int",
+          "description": "Seconds to wait for Dapr, 1 to 240."
+        },
+        {
+          "name": "template",
+          "enum": [
+            "Liquid"
+          ],
+          "description": "Templating engine for the message."
+        },
+        {
+          "name": "content-type",
+          "enum": [
+            "application/json"
+          ],
+          "description": "Message content type."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "metadata",
+            "description": "Binding-specific key/value metadata.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "item",
+                  "description": "One metadata entry; text is the value.",
+                  "attributes": [
+                    {
+                      "name": "key",
+                      "required": true,
+                      "description": "Metadata entry name."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "data",
+            "description": "Message content passed to the binding.",
+            "max": 1,
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "trace",
+      "description": "Writes a custom entry to request tracing and Application Insights.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/trace-policy",
+      "category": "Logging",
+      "attributes": [
+        {
+          "name": "source",
+          "required": true,
+          "description": "Literal label identifying where the trace came from."
+        },
+        {
+          "name": "severity",
+          "enum": [
+            "verbose",
+            "information",
+            "error"
+          ],
+          "description": "Trace severity level."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "message",
+            "description": "Text or expression to log.",
+            "min": 1,
+            "max": 1,
+            "content": {
+              "kind": "text",
+              "expressions": true
+            }
+          },
+          {
+            "name": "metadata",
+            "description": "Custom property added to the Application Insights trace.",
+            "attributes": [
+              {
+                "name": "name",
+                "required": true,
+                "expressions": true,
+                "description": "Property name."
+              },
+              {
+                "name": "value",
+                "required": true,
+                "expressions": true,
+                "description": "Property value."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "emit-metric",
+      "description": "Sends a custom metric to Application Insights.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/emit-metric-policy",
+      "category": "Logging",
+      "attributes": [
+        {
+          "name": "name",
+          "required": true,
+          "description": "Custom metric name."
+        },
+        {
+          "name": "namespace",
+          "description": "Custom metric namespace."
+        },
+        {
+          "name": "value",
+          "expressions": true,
+          "description": "Metric value as a double; defaults to 1."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "dimension",
+            "description": "A metric dimension; value optional for default dimensions.",
+            "min": 1,
+            "attributes": [
+              {
+                "name": "name",
+                "required": true,
+                "expressions": true,
+                "description": "Dimension name."
+              },
+              {
+                "name": "value",
+                "expressions": true,
+                "description": "Dimension value."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "llm-emit-token-metric",
+      "description": "Sends LLM token usage metrics to Application Insights.",
+      "sections": [
+        "inbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/llm-emit-token-metric-policy",
+      "category": "Logging",
+      "attributes": [
+        {
+          "name": "namespace",
+          "description": "Metric namespace."
+        }
+      ],
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "dimension",
+            "description": "A metric dimension; value optional for default dimensions.",
+            "min": 1,
+            "attributes": [
+              {
+                "name": "name",
+                "required": true,
+                "expressions": true,
+                "description": "Dimension name."
+              },
+              {
+                "name": "value",
+                "expressions": true,
+                "description": "Dimension value."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "sql-data-source",
+      "description": "GraphQL resolver only: resolves a field with an Azure SQL query.",
+      "sections": [],
+      "docs": "https://learn.microsoft.com/azure/api-management/sql-data-source-policy",
+      "category": "GraphQL resolvers",
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "connection-info",
+            "description": "Connection settings for the Azure SQL database.",
+            "min": 1,
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "connection-string",
+                  "description": "Azure SQL connection string.",
+                  "min": 1,
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "use-managed-identity",
+                      "expressions": true,
+                      "type": "bool",
+                      "description": "Connect with the system-assigned managed identity."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "include-fragment",
+                  "description": "Inlines a named policy fragment.",
+                  "attributes": [
+                    {
+                      "name": "fragment-id",
+                      "required": true,
+                      "description": "Name of the policy fragment to insert."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                },
+                {
+                  "name": "authentication-certificate",
+                  "description": "Authenticates to the backend with a client certificate.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "thumbprint",
+                      "expressions": true,
+                      "description": "Thumbprint of the client certificate."
+                    },
+                    {
+                      "name": "certificate-id",
+                      "expressions": true,
+                      "description": "Name of the certificate resource."
+                    },
+                    {
+                      "name": "body",
+                      "expressions": true,
+                      "description": "Certificate bytes, when not using the certificate store."
+                    },
+                    {
+                      "name": "password",
+                      "expressions": true,
+                      "description": "Password protecting a certificate supplied in body."
+                    }
+                  ],
+                  "oneOf": [
+                    [
+                      "thumbprint",
+                      "certificate-id",
+                      "body"
+                    ]
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "include-fragment",
+            "description": "Inlines a named policy fragment.",
+            "attributes": [
+              {
+                "name": "fragment-id",
+                "required": true,
+                "description": "Name of the policy fragment to insert."
+              }
+            ],
+            "content": {
+              "kind": "empty"
+            }
+          },
+          {
+            "name": "request",
+            "description": "The T-SQL request and its parameters.",
+            "min": 1,
+            "max": 1,
+            "attributes": [
+              {
+                "name": "single-result",
+                "expressions": true,
+                "type": "bool",
+                "description": "Expect at most one row back."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "include-fragment",
+                  "description": "Inlines a named policy fragment.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "fragment-id",
+                      "required": true,
+                      "description": "Name of the policy fragment to insert."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                },
+                {
+                  "name": "set-body",
+                  "description": "Replaces the request or response body with the element text.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the body text."
+                    },
+                    {
+                      "name": "xsi-nil",
+                      "enum": [
+                        "blank",
+                        "null"
+                      ],
+                      "description": "How xsi:nil elements are rendered."
+                    },
+                    {
+                      "name": "parse-date",
+                      "type": "bool",
+                      "description": "Convert date-like strings to DateTime values."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                },
+                {
+                  "name": "sql-statement",
+                  "description": "T-SQL to run; result comes from the last statement.",
+                  "min": 1,
+                  "max": 1,
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "parameters",
+                  "description": "SQL parameters for the request.",
+                  "max": 1,
+                  "content": {
+                    "kind": "children",
+                    "children": [
+                      {
+                        "name": "parameter",
+                        "description": "One SQL parameter; text is the value.",
+                        "attributes": [
+                          {
+                            "name": "name",
+                            "required": true,
+                            "description": "Parameter name, written with a leading @."
+                          },
+                          {
+                            "name": "sql-type",
+                            "description": "SQL data type of the parameter."
+                          }
+                        ],
+                        "content": {
+                          "kind": "text",
+                          "expressions": true
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "response",
+            "description": "Policies that shape the SQL response.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "include-fragment",
+                  "description": "Inlines a named policy fragment.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "fragment-id",
+                      "required": true,
+                      "description": "Name of the policy fragment to insert."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                },
+                {
+                  "name": "set-body",
+                  "description": "Replaces the request or response body with the element text.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the body text."
+                    },
+                    {
+                      "name": "xsi-nil",
+                      "enum": [
+                        "blank",
+                        "null"
+                      ],
+                      "description": "How xsi:nil elements are rendered."
+                    },
+                    {
+                      "name": "parse-date",
+                      "type": "bool",
+                      "description": "Convert date-like strings to DateTime values."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                },
+                {
+                  "name": "publish-event",
+                  "description": "GraphQL resolver only: publishes an event to GraphQL subscriptions.",
+                  "max": 1,
+                  "content": {
+                    "kind": "children",
+                    "children": [
+                      {
+                        "name": "targets",
+                        "description": "Subscriptions in the schema that receive the event.",
+                        "min": 1,
+                        "max": 1,
+                        "content": {
+                          "kind": "children",
+                          "children": [
+                            {
+                              "name": "graphql-subscription",
+                              "description": "One subscription field to publish to.",
+                              "min": 1,
+                              "attributes": [
+                                {
+                                  "name": "id",
+                                  "required": true,
+                                  "description": "Subscription field in the GraphQL schema."
+                                }
+                              ],
+                              "content": {
+                                "kind": "empty"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "cosmosdb-data-source",
+      "description": "GraphQL resolver only: resolves a field against a Cosmos DB container.",
+      "sections": [],
+      "docs": "https://learn.microsoft.com/azure/api-management/cosmosdb-data-source-policy",
+      "category": "GraphQL resolvers",
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "connection-info",
+            "description": "Connection settings for the Cosmos DB container.",
+            "min": 1,
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "connection-string",
+                  "description": "Cosmos DB account connection string.",
+                  "min": 1,
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "use-managed-identity",
+                      "type": "bool",
+                      "description": "Connect with the system-assigned managed identity."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "database-name",
+                  "description": "Cosmos DB database name.",
+                  "min": 1,
+                  "max": 1,
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "container-name",
+                  "description": "Container name within the database.",
+                  "min": 1,
+                  "max": 1,
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "query-request",
+            "description": "Query the container with SQL; one request kind required.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "enable-low-precision-order-by",
+                "type": "bool",
+                "description": "Enable low-precision ORDER BY in Cosmos DB."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "sql-statement",
+                  "description": "SQL query text.",
+                  "max": 1,
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "parameters",
+                  "description": "Query parameters for the SQL statement.",
+                  "max": 1,
+                  "content": {
+                    "kind": "children",
+                    "children": [
+                      {
+                        "name": "parameter",
+                        "description": "One query parameter; text is the value.",
+                        "attributes": [
+                          {
+                            "name": "name",
+                            "required": true,
+                            "description": "Parameter name, written with a leading @."
+                          }
+                        ],
+                        "content": {
+                          "kind": "text",
+                          "expressions": true
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "partition-key",
+                  "description": "Partition key locating the item or query in the container.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "data-type",
+                      "enum": [
+                        "string",
+                        "number",
+                        "bool",
+                        "none",
+                        "null"
+                      ],
+                      "description": "Type of the partition key value."
+                    },
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the element text."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "paging",
+                  "description": "Splits query results into pages.",
+                  "max": 1,
+                  "content": {
+                    "kind": "children",
+                    "children": [
+                      {
+                        "name": "max-item-count",
+                        "description": "Most items per page; -1 for no limit.",
+                        "min": 1,
+                        "max": 1,
+                        "attributes": [
+                          {
+                            "name": "template",
+                            "enum": [
+                              "liquid"
+                            ],
+                            "description": "Templating engine for the element text."
+                          }
+                        ],
+                        "content": {
+                          "kind": "text"
+                        }
+                      },
+                      {
+                        "name": "continuation-token",
+                        "description": "Token for fetching the next page.",
+                        "min": 1,
+                        "max": 1,
+                        "attributes": [
+                          {
+                            "name": "template",
+                            "enum": [
+                              "liquid"
+                            ],
+                            "description": "Templating engine for the element text."
+                          }
+                        ],
+                        "content": {
+                          "kind": "text"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "read-request",
+            "description": "Read one item by ID; one request kind required.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "id",
+                  "description": "ID of the target item in the container.",
+                  "min": 1,
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the element text."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "partition-key",
+                  "description": "Partition key locating the item or query in the container.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "data-type",
+                      "enum": [
+                        "string",
+                        "number",
+                        "bool",
+                        "none",
+                        "null"
+                      ],
+                      "description": "Type of the partition key value."
+                    },
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the element text."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete-request",
+            "description": "Delete one item by ID; one request kind required.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "consistency-level",
+                "enum": [
+                  "bounded-staleness",
+                  "consistent-prefix",
+                  "eventual",
+                  "session",
+                  "strong"
+                ],
+                "description": "Cosmos DB consistency level for the delete."
+              },
+              {
+                "name": "pre-trigger",
+                "description": "Registered pre-trigger function to run."
+              },
+              {
+                "name": "post-trigger",
+                "description": "Registered post-trigger function to run."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "etag",
+                  "description": "Entity tag for optimistic concurrency checks.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "type",
+                      "enum": [
+                        "match",
+                        "no-match"
+                      ],
+                      "description": "Whether the etag must match the stored one."
+                    },
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the element text."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "id",
+                  "description": "ID of the target item in the container.",
+                  "min": 1,
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the element text."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "partition-key",
+                  "description": "Partition key locating the item or query in the container.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "data-type",
+                      "enum": [
+                        "string",
+                        "number",
+                        "bool",
+                        "none",
+                        "null"
+                      ],
+                      "description": "Type of the partition key value."
+                    },
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the element text."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "write-request",
+            "description": "Insert, replace, or upsert an item; one request kind required.",
+            "max": 1,
+            "attributes": [
+              {
+                "name": "type",
+                "enum": [
+                  "insert",
+                  "replace",
+                  "upsert"
+                ],
+                "description": "Kind of write to perform."
+              },
+              {
+                "name": "consistency-level",
+                "enum": [
+                  "bounded-staleness",
+                  "consistent-prefix",
+                  "eventual",
+                  "session",
+                  "strong"
+                ],
+                "description": "Cosmos DB consistency level for the write."
+              },
+              {
+                "name": "indexing-directive",
+                "description": "Indexing policy applied to the written item."
+              },
+              {
+                "name": "pre-trigger",
+                "description": "Registered pre-trigger function to run."
+              },
+              {
+                "name": "post-trigger",
+                "description": "Registered post-trigger function to run."
+              }
+            ],
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "id",
+                  "description": "ID of the target item in the container.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the element text."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "partition-key",
+                  "description": "Partition key locating the item or query in the container.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "data-type",
+                      "enum": [
+                        "string",
+                        "number",
+                        "bool",
+                        "none",
+                        "null"
+                      ],
+                      "description": "Type of the partition key value."
+                    },
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the element text."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "etag",
+                  "description": "Entity tag for optimistic concurrency checks.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "type",
+                      "enum": [
+                        "match",
+                        "no-match"
+                      ],
+                      "description": "Whether the etag must match the stored one."
+                    },
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the element text."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "name": "set-body",
+                  "description": "Replaces the request or response body with the element text.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the body text."
+                    },
+                    {
+                      "name": "xsi-nil",
+                      "enum": [
+                        "blank",
+                        "null"
+                      ],
+                      "description": "How xsi:nil elements are rendered."
+                    },
+                    {
+                      "name": "parse-date",
+                      "type": "bool",
+                      "description": "Convert date-like strings to DateTime values."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "response",
+            "description": "Policies that shape the Cosmos DB response.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "set-body",
+                  "description": "Replaces the request or response body with the element text.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the body text."
+                    },
+                    {
+                      "name": "xsi-nil",
+                      "enum": [
+                        "blank",
+                        "null"
+                      ],
+                      "description": "How xsi:nil elements are rendered."
+                    },
+                    {
+                      "name": "parse-date",
+                      "type": "bool",
+                      "description": "Convert date-like strings to DateTime values."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                },
+                {
+                  "name": "publish-event",
+                  "description": "GraphQL resolver only: publishes an event to GraphQL subscriptions.",
+                  "max": 1,
+                  "content": {
+                    "kind": "children",
+                    "children": [
+                      {
+                        "name": "targets",
+                        "description": "Subscriptions in the schema that receive the event.",
+                        "min": 1,
+                        "max": 1,
+                        "content": {
+                          "kind": "children",
+                          "children": [
+                            {
+                              "name": "graphql-subscription",
+                              "description": "One subscription field to publish to.",
+                              "min": 1,
+                              "attributes": [
+                                {
+                                  "name": "id",
+                                  "required": true,
+                                  "description": "Subscription field in the GraphQL schema."
+                                }
+                              ],
+                              "content": {
+                                "kind": "empty"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "http-data-source",
+      "description": "GraphQL resolver only: resolves a field with an HTTP request.",
+      "sections": [],
+      "docs": "https://learn.microsoft.com/azure/api-management/http-data-source-policy",
+      "category": "GraphQL resolvers",
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "http-request",
+            "description": "URL and policies building the resolver HTTP request.",
+            "min": 1,
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "get-authorization-context",
+                  "description": "Fetches the authorization context for a credential manager connection.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "provider-id",
+                      "required": true,
+                      "expressions": true,
+                      "description": "Credential provider resource identifier."
+                    },
+                    {
+                      "name": "authorization-id",
+                      "required": true,
+                      "expressions": true,
+                      "description": "Connection resource identifier."
+                    },
+                    {
+                      "name": "context-variable-name",
+                      "required": true,
+                      "expressions": true,
+                      "description": "Variable that receives the Authorization object."
+                    },
+                    {
+                      "name": "identity-type",
+                      "expressions": true,
+                      "enum": [
+                        "managed",
+                        "jwt"
+                      ],
+                      "description": "Identity checked against the connection access policy."
+                    },
+                    {
+                      "name": "identity",
+                      "expressions": true,
+                      "description": "Entra JWT used when identity-type is jwt."
+                    },
+                    {
+                      "name": "ignore-error",
+                      "expressions": true,
+                      "type": "bool",
+                      "description": "On failure, set variable to null instead of returning 500."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                },
+                {
+                  "name": "set-backend-service",
+                  "description": "Points the request at another backend URL, backend entity, or Dapr service.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "base-url",
+                      "expressions": true,
+                      "description": "Replacement backend base URL."
+                    },
+                    {
+                      "name": "backend-id",
+                      "expressions": true,
+                      "description": "Backend entity name, or \"dapr\" for Dapr invocation."
+                    },
+                    {
+                      "name": "sf-resolve-condition",
+                      "expressions": true,
+                      "type": "bool",
+                      "description": "Service Fabric: condition to retry with fresh resolution."
+                    },
+                    {
+                      "name": "sf-service-instance-name",
+                      "expressions": true,
+                      "description": "Service Fabric: service instance to target at runtime."
+                    },
+                    {
+                      "name": "sf-partition-key",
+                      "expressions": true,
+                      "description": "Service Fabric: partition key of the service."
+                    },
+                    {
+                      "name": "sf-replica-type",
+                      "expressions": true,
+                      "enum": [
+                        "primary",
+                        "secondary"
+                      ],
+                      "description": "Service Fabric: route to primary or secondary replica."
+                    },
+                    {
+                      "name": "sf-listener-name",
+                      "expressions": true,
+                      "description": "Service Fabric: listener to use when several exist."
+                    },
+                    {
+                      "name": "dapr-app-id",
+                      "expressions": true,
+                      "description": "Dapr: target microservice app ID."
+                    },
+                    {
+                      "name": "dapr-method",
+                      "expressions": true,
+                      "description": "Dapr: method name or URL to invoke."
+                    },
+                    {
+                      "name": "dapr-namespace",
+                      "expressions": true,
+                      "description": "Dapr: namespace hosting the target microservice."
+                    }
+                  ],
+                  "oneOf": [
+                    [
+                      "base-url",
+                      "backend-id"
+                    ]
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                },
+                {
+                  "name": "include-fragment",
+                  "description": "Inlines a named policy fragment.",
+                  "attributes": [
+                    {
+                      "name": "fragment-id",
+                      "required": true,
+                      "description": "Name of the policy fragment to insert."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                },
+                {
+                  "name": "set-method",
+                  "description": "Changes the HTTP method; the element text is the method.",
+                  "min": 1,
+                  "max": 1,
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                },
+                {
+                  "name": "set-url",
+                  "description": "Target URL of the request.",
+                  "min": 1,
+                  "max": 1,
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                },
+                {
+                  "name": "set-header",
+                  "description": "Adds, replaces, appends to, or removes an HTTP header.",
+                  "attributes": [
+                    {
+                      "name": "name",
+                      "required": true,
+                      "expressions": true,
+                      "description": "Header to set."
+                    },
+                    {
+                      "name": "exists-action",
+                      "expressions": true,
+                      "enum": [
+                        "override",
+                        "skip",
+                        "append",
+                        "delete"
+                      ],
+                      "description": "Behavior when the header is already present."
+                    }
+                  ],
+                  "content": {
+                    "kind": "children",
+                    "children": [
+                      {
+                        "name": "value",
+                        "description": "A header value; repeat for multiple values.",
+                        "content": {
+                          "kind": "text",
+                          "expressions": true
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "set-body",
+                  "description": "Replaces the request or response body with the element text.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the body text."
+                    },
+                    {
+                      "name": "xsi-nil",
+                      "enum": [
+                        "blank",
+                        "null"
+                      ],
+                      "description": "How xsi:nil elements are rendered."
+                    },
+                    {
+                      "name": "parse-date",
+                      "type": "bool",
+                      "description": "Convert date-like strings to DateTime values."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                },
+                {
+                  "name": "authentication-certificate",
+                  "description": "Authenticates to the backend with a client certificate.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "thumbprint",
+                      "expressions": true,
+                      "description": "Thumbprint of the client certificate."
+                    },
+                    {
+                      "name": "certificate-id",
+                      "expressions": true,
+                      "description": "Name of the certificate resource."
+                    },
+                    {
+                      "name": "body",
+                      "expressions": true,
+                      "description": "Certificate bytes, when not using the certificate store."
+                    },
+                    {
+                      "name": "password",
+                      "expressions": true,
+                      "description": "Password protecting a certificate supplied in body."
+                    }
+                  ],
+                  "oneOf": [
+                    [
+                      "thumbprint",
+                      "certificate-id",
+                      "body"
+                    ]
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "backend",
+            "description": "Optionally forwards the resolver request to a backend.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "forward-request",
+                  "description": "Sends the current request on to the backend service.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "http-version",
+                      "enum": [
+                        "1",
+                        "2or1",
+                        "2"
+                      ],
+                      "description": "HTTP version used toward the backend."
+                    },
+                    {
+                      "name": "timeout",
+                      "expressions": true,
+                      "type": "int",
+                      "description": "Seconds to wait for backend response headers."
+                    },
+                    {
+                      "name": "timeout-ms",
+                      "expressions": true,
+                      "type": "int",
+                      "description": "Milliseconds to wait for backend headers; excludes timeout."
+                    },
+                    {
+                      "name": "continue-timeout",
+                      "expressions": true,
+                      "type": "int",
+                      "description": "Seconds to wait for a 100 Continue reply."
+                    },
+                    {
+                      "name": "follow-redirects",
+                      "expressions": true,
+                      "type": "bool",
+                      "description": "Follow backend redirects instead of returning them."
+                    },
+                    {
+                      "name": "buffer-request-body",
+                      "type": "bool",
+                      "description": "Buffer the request body so retries can resend it."
+                    },
+                    {
+                      "name": "buffer-response",
+                      "type": "bool",
+                      "description": "Buffer chunked responses; set false for streaming."
+                    },
+                    {
+                      "name": "fail-on-error-status-code",
+                      "type": "bool",
+                      "description": "Enter on-error for backend 4xx and 5xx codes."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "http-response",
+            "description": "Policies that shape the resolver HTTP response.",
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "set-body",
+                  "description": "Replaces the request or response body with the element text.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "template",
+                      "enum": [
+                        "liquid"
+                      ],
+                      "description": "Templating engine for the body text."
+                    },
+                    {
+                      "name": "xsi-nil",
+                      "enum": [
+                        "blank",
+                        "null"
+                      ],
+                      "description": "How xsi:nil elements are rendered."
+                    },
+                    {
+                      "name": "parse-date",
+                      "type": "bool",
+                      "description": "Convert date-like strings to DateTime values."
+                    }
+                  ],
+                  "content": {
+                    "kind": "text",
+                    "expressions": true
+                  }
+                },
+                {
+                  "name": "xml-to-json",
+                  "description": "Converts an XML body to JSON.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "kind",
+                      "required": true,
+                      "expressions": true,
+                      "enum": [
+                        "javascript-friendly",
+                        "direct"
+                      ],
+                      "description": "JSON shape: JavaScript-friendly or mirroring the XML."
+                    },
+                    {
+                      "name": "apply",
+                      "required": true,
+                      "expressions": true,
+                      "enum": [
+                        "always",
+                        "content-type-xml"
+                      ],
+                      "description": "Convert always or only for XML content types."
+                    },
+                    {
+                      "name": "consider-accept-header",
+                      "expressions": true,
+                      "type": "bool",
+                      "description": "Convert only if the Accept header asks for JSON."
+                    },
+                    {
+                      "name": "always-array-child-elements",
+                      "expressions": true,
+                      "type": "bool",
+                      "description": "Always render child elements as JSON arrays."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                },
+                {
+                  "name": "find-and-replace",
+                  "description": "Replaces a substring in the request or response body.",
+                  "max": 1,
+                  "attributes": [
+                    {
+                      "name": "from",
+                      "required": true,
+                      "expressions": true,
+                      "description": "Text to search for."
+                    },
+                    {
+                      "name": "to",
+                      "required": true,
+                      "expressions": true,
+                      "description": "Replacement text; empty removes matches."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                },
+                {
+                  "name": "publish-event",
+                  "description": "GraphQL resolver only: publishes an event to GraphQL subscriptions.",
+                  "max": 1,
+                  "content": {
+                    "kind": "children",
+                    "children": [
+                      {
+                        "name": "targets",
+                        "description": "Subscriptions in the schema that receive the event.",
+                        "min": 1,
+                        "max": 1,
+                        "content": {
+                          "kind": "children",
+                          "children": [
+                            {
+                              "name": "graphql-subscription",
+                              "description": "One subscription field to publish to.",
+                              "min": 1,
+                              "attributes": [
+                                {
+                                  "name": "id",
+                                  "required": true,
+                                  "description": "Subscription field in the GraphQL schema."
+                                }
+                              ],
+                              "content": {
+                                "kind": "empty"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "include-fragment",
+                  "description": "Inlines a named policy fragment.",
+                  "attributes": [
+                    {
+                      "name": "fragment-id",
+                      "required": true,
+                      "description": "Name of the policy fragment to insert."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "publish-event",
+      "description": "GraphQL resolver only: publishes an event to GraphQL subscriptions.",
+      "sections": [],
+      "docs": "https://learn.microsoft.com/azure/api-management/publish-event-policy",
+      "category": "GraphQL resolvers",
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "targets",
+            "description": "Subscriptions in the schema that receive the event.",
+            "min": 1,
+            "max": 1,
+            "content": {
+              "kind": "children",
+              "children": [
+                {
+                  "name": "graphql-subscription",
+                  "description": "One subscription field to publish to.",
+                  "min": 1,
+                  "attributes": [
+                    {
+                      "name": "id",
+                      "required": true,
+                      "description": "Subscription field in the GraphQL schema."
+                    }
+                  ],
+                  "content": {
+                    "kind": "empty"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose",
+      "description": "Applies policies conditionally, like if / else-if / else.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/choose-policy",
+      "category": "Policy control and flow",
+      "content": {
+        "kind": "children",
+        "children": [
+          {
+            "name": "when",
+            "description": "Policies applied when its condition is the first true one.",
+            "min": 1,
+            "attributes": [
+              {
+                "name": "condition",
+                "required": true,
+                "expressions": true,
+                "type": "bool",
+                "description": "Boolean expression or constant to test."
+              }
+            ],
+            "content": {
+              "kind": "policies"
+            }
+          },
+          {
+            "name": "otherwise",
+            "description": "Policies applied when no when condition is true.",
+            "max": 1,
+            "content": {
+              "kind": "policies"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "include-fragment",
+      "description": "Inlines a named policy fragment.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/include-fragment-policy",
+      "category": "Policy control and flow",
+      "attributes": [
+        {
+          "name": "fragment-id",
+          "required": true,
+          "description": "Name of the policy fragment to insert."
+        }
+      ],
+      "content": {
+        "kind": "empty"
+      }
+    },
+    {
+      "name": "retry",
+      "description": "Re-runs the enclosed policies while a condition holds.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/retry-policy",
+      "category": "Policy control and flow",
+      "attributes": [
+        {
+          "name": "condition",
+          "required": true,
+          "expressions": true,
+          "type": "bool",
+          "description": "Keep retrying while this is true."
+        },
+        {
+          "name": "count",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Retry attempts, between 1 and 50."
+        },
+        {
+          "name": "interval",
+          "required": true,
+          "expressions": true,
+          "type": "int",
+          "description": "Seconds to wait between attempts."
+        },
+        {
+          "name": "max-interval",
+          "expressions": true,
+          "type": "int",
+          "description": "Upper bound in seconds for exponential backoff."
+        },
+        {
+          "name": "delta",
+          "expressions": true,
+          "type": "int",
+          "description": "Seconds added per attempt for linear or exponential backoff."
+        },
+        {
+          "name": "first-fast-retry",
+          "expressions": true,
+          "type": "bool",
+          "description": "Make the first retry immediately."
+        }
+      ],
+      "content": {
+        "kind": "policies",
+        "exclude": [
+          "wait"
+        ]
+      }
+    },
+    {
+      "name": "wait",
+      "description": "Waits for enclosed send-request, cache-lookup-value, or choose to finish.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/wait-policy",
+      "category": "Policy control and flow",
+      "attributes": [
+        {
+          "name": "for",
+          "expressions": true,
+          "enum": [
+            "all",
+            "any"
+          ],
+          "description": "Wait for all children or just the first."
+        }
+      ],
+      "content": {
+        "kind": "policies",
+        "only": [
+          "send-request",
+          "cache-lookup-value",
+          "choose"
+        ]
+      }
+    },
+    {
+      "name": "base",
+      "description": "Runs the policies defined at the parent scope at this point.",
+      "sections": [
+        "inbound",
+        "backend",
+        "outbound",
+        "on-error"
+      ],
+      "docs": "https://learn.microsoft.com/azure/api-management/api-management-howto-policies",
+      "category": "Policy control and flow",
+      "content": {
+        "kind": "empty"
+      }
+    }
+  ]
+}
