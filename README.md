@@ -86,6 +86,10 @@ npm run package
 code --install-extension apim-policy-*.vsix
 ```
 
+Releases are published to the Visual Studio Marketplace by
+[`.woodpecker/extension.release.yml`](.woodpecker/extension.release.yml) when a `v*` tag is pushed
+(see [VERSIONING.md](VERSIONING.md)).
+
 For C# IntelliSense, install the C# extension (`ms-dotnettools.csharp`). C# type errors also need
 the .NET 10 SDK on `PATH`, since the shadow file is a .NET 10 file-based app. Without the SDK,
 completion and hover still work, but there are no type errors. The language status item for
