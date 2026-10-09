@@ -46,6 +46,10 @@ versioning and ignore the Rust-specific parts.
   `vitest.config.ts`), which is the logic surface.
   The VS Code glue in `src/extension.ts` and `src/features/` is wiring, and it's covered by
   `@vscode/test-electron` integration tests instead.
+- **Release:** [`.woodpecker/extension.release.yml`](.woodpecker/extension.release.yml)
+  publishes to the Visual Studio Marketplace on `v*` tags or by hand from `main`. It needs the
+  `vsce_pat` secret (an Azure DevOps token with Marketplace (Manage) scope for the `thmsn`
+  publisher), provisioned by hand in Woodpecker.
 - **CI:** [`.woodpecker/extension.ci.yml`](.woodpecker/extension.ci.yml), on the Linux
   Docker agents. It needs no secrets or host volumes, so the repo doesn't have to be marked
   trusted. The `weekly-audit` cron has to be created in the Woodpecker UI before the scheduled

@@ -1,0 +1,44 @@
+# Publishes the extension to the Visual Studio Marketplace. Runs on v* tags (the tag sets
+# MAJOR.MINOR; the commit count is the patch) and by hand from main. Needs the vsce_pat secret:
+# an Azure DevOps token with Marketplace (Manage) scope for the thmsn publisher. Without it the
+# publish step fails red rather than going green without publishing.
+when:
+  - event: manual
+    branch: main
+  - event: tag
+    ref: refs/tags/v*
+
+labels:
+  platform: linux/amd64
+
+clone:
+  git:
+    image: woodpeckerci/plugin-git
+    settings:
+      partial: false # full history and tags: the published version is derived from them
+      tags: true
+      submodule_override:
+        standards: https://github.com/charliethomson/standards.git
+
+steps:
+  test:
+    image: node:22-bookworm
+    commands:
+      - npm ci
+      - npm run typecheck
+      - npm test
+
+  package:
+    image: node:22-bookworm
+    commands:
+      - git config --global --add safe.directory "$CI_WORKSPACE"
+      - npm run package
+
+  publish:
+    image: node:22-bookworm
+    environment:
+      VSCE_PAT:
+        from_secret: vsce_pat
+    commands:
+      - git config --global --add safe.directory "$CI_WORKSPACE"
+      - scripts/ci/publish.sh

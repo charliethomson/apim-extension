@@ -10,3 +10,4 @@ commit count makes it monotonic. Full doctrine: [`standards/docs/versioning.md`]
 - `npm run package` passes that version to vsce, so the `.vsix` and the installed extension
   report it.
 - Bump `MAJOR.MINOR` by tagging: `git tag v0.2.0 && git push --tags`.
+- Pushing a `v*` tag also publishes that build to the Marketplace (`.woodpecker/extension.release.yml`).
