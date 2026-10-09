@@ -1,7 +1,6 @@
 **
 !dist/extension.js
 !syntaxes/**
-!data/**
 !stubs/**
 !language-configuration.json
 !package.json
