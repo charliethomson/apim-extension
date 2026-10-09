@@ -14,4 +14,4 @@ if [ -z "${VSCE_PAT:-}" ]; then
   exit 1
 fi
 npx vsce publish --packagePath "$vsix" --skip-duplicate
-echo "published thmsn.apim-policy@${version}"
+echo "published $(node -p "require('./package.json').publisher").apim-policy@${version}"

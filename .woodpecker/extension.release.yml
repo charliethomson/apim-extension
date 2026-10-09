@@ -1,6 +1,6 @@
 # Publishes the extension to the Visual Studio Marketplace. Runs on v* tags (the tag sets
 # MAJOR.MINOR; the commit count is the patch) and by hand from main. Needs the vsce_pat secret:
-# an Azure DevOps token with Marketplace (Manage) scope for the thmsn publisher. Without it the
+# an Azure DevOps token with Marketplace (Manage) scope for the thmsn-dev publisher. Without it the
 # publish step fails red rather than going green without publishing.
 when:
   - event: manual
