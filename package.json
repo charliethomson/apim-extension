@@ -176,16 +176,20 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "^20.19.43",
+    "@types/node": "^22.0.0",
     "@types/vscode": "~1.95.0",
-    "@vitest/coverage-v8": "^3.2.7",
+    "@vitest/coverage-v8": "^5.0.3",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.28.2",
     "mocha": "^11.8.0",
     "typescript": "~5.9.3",
-    "vitest": "^3.2.7",
+    "vitest": "^5.0.3",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.1.2",
+    "diff": "^8.0.3"
   }
 }
