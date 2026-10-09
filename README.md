@@ -93,7 +93,8 @@ Releases are published to the Visual Studio Marketplace by
 For C# IntelliSense, install the C# extension (`ms-dotnettools.csharp`). C# type errors also need
 the .NET 10 SDK on `PATH`, since the shadow file is a .NET 10 file-based app. Without the SDK,
 completion and hover still work, but there are no type errors. The language status item for
-APIM policies shows which mode is active.
+APIM policies shows which mode is active. In Restricted Mode (an untrusted workspace) the C#
+features stay off, because they restore a generated project from NuGet.
 
 ### Settings
 
@@ -193,6 +194,15 @@ reference and the policy expressions page.
   Display names in `namedValueInformation.json`, Bicep/ARM templates and live APIM instances aren't read.
 - Highlighting in the escaped `xml` format treats `&quot;…&quot;` as code, not as a C# string.
 - Formatting isn't implemented.
+
+## Licence and attribution
+
+The code is MIT licensed ([LICENSE](LICENSE)). The policy catalog (`data/policies.json`), the
+allowlist (`data/allowed-types.json`) and the doc comments in `stubs/ApimContext.cs` are
+paraphrased from the [Azure API Management documentation](https://learn.microsoft.com/azure/api-management/)
+([MicrosoftDocs/azure-docs](https://github.com/MicrosoftDocs/azure-docs), CC BY 4.0). They aren't
+affiliated with or endorsed by Microsoft. The grammars in `test/grammars/` are MIT-licensed copies
+used only by the tests; see [their notice](test/grammars/NOTICE).
 
 ## Docs
 
