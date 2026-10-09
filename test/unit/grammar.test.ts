@@ -126,3 +126,66 @@ describe('expression injection grammar', () => {
     expect(toks.some((t) => inExpr(t.scopes))).toBe(false);
   });
 });
+
+describe('bracket and token types as VS Code applies them', () => {
+  // Mirrors how VS Code loads the grammar from package.json: token type overrides and bracket
+  // scopes decide what the bracket colouriser treats as a bracket (type other + balanced bit).
+  const lines = [
+    '<set-body>@{',
+    '    if (page.HasValue && page.Value > 1) { errors.Add("ru-arg-page > 1 needs a seed"); }',
+    '    // a > b in a comment',
+    '    return new List<int>().Count(x => x >= 0) < 5 ? "a" : "b";',
+    '}</set-body>',
+  ];
+
+  async function classify(): Promise<{ text: string; type: number; balanced: boolean }[]> {
+    const cfg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).contributes.grammars[0];
+    const types: Record<string, number> = { other: 0, comment: 1, string: 2, regex: 3 };
+    // A fresh registry: one that already loaded the grammar without configuration reuses it.
+    const fresh = new vsctm.Registry({
+      onigLib: Promise.resolve({
+        createOnigScanner: (sources) => new oniguruma.OnigScanner(sources),
+        createOnigString: (str) => new oniguruma.OnigString(str),
+      }),
+      loadGrammar: async (scopeName) => {
+        const path = grammarFiles[scopeName];
+        return path ? vsctm.parseRawGrammar(readFileSync(path, 'utf8'), path) : null;
+      },
+      getInjections: (scopeName) => (scopeName === 'text.xml.apim' ? ['apim.expression.injection'] : undefined),
+    });
+    const grammar = (await fresh.loadGrammarWithConfiguration('text.xml.apim', 1, {
+      embeddedLanguages: Object.fromEntries(Object.keys(cfg.embeddedLanguages).map((k) => [k, 2])),
+      tokenTypes: Object.fromEntries(Object.entries(cfg.tokenTypes as Record<string, string>).map(([k, v]) => [k, types[v]])),
+      balancedBracketSelectors: ['*'],
+      unbalancedBracketSelectors: cfg.unbalancedBracketScopes,
+    }))!;
+    const out: { text: string; type: number; balanced: boolean }[] = [];
+    let state = vsctm.INITIAL;
+    for (const line of lines) {
+      const r = grammar.tokenizeLine2(line, state);
+      for (let i = 0; i < r.tokens.length; i += 2) {
+        const end = i + 2 < r.tokens.length ? r.tokens[i + 2] : line.length;
+        const meta = r.tokens[i + 1];
+        out.push({ text: line.slice(r.tokens[i], end), type: (meta >>> 8) & 3, balanced: ((meta >>> 10) & 1) === 1 });
+      }
+      state = r.ruleStack;
+    }
+    return out;
+  }
+
+  it('keeps C# strings and comments typed as strings and comments inside expressions', async () => {
+    const toks = await classify();
+    expect(toks.find((t) => t.text.includes('ru-arg-page > 1'))?.type).toBe(2);
+    expect(toks.find((t) => t.text.includes('a > b in a comment'))?.type).toBe(1);
+  });
+
+  it('does not treat comparison or arrow operators as brackets', async () => {
+    const toks = await classify();
+    // Code tokens the colouriser would scan for brackets. Tokens with equal attributes merge, so
+    // look at their text: once generic argument lists are removed, no < or > may remain.
+    const scanned = toks.filter((t) => t.type === 0 && t.balanced && !t.text.includes('</') && !t.text.startsWith('<set-body'));
+    for (const t of scanned) expect(t.text.replace(/<\w+>/g, ''), t.text).not.toMatch(/[<>]/);
+    expect(scanned.length).toBeGreaterThan(0);
+  });
+});
+
