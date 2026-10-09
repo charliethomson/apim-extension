@@ -105,6 +105,22 @@ describe('expression injection grammar', () => {
     expect(scopesOf(toks, '{{api-key}}')).toContain('variable.other.named-value.apim');
   });
 
+  it('scopes C# comparison and arrow operators as unbalanced brackets, but not generics', async () => {
+    // VS Code's bracket colouriser flags lone < and > red unless their scope is listed here.
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    const unbalanced: string[] = pkg.contributes.grammars[0].unbalancedBracketScopes;
+    const isUnbalanced = (scopes: string[]) => scopes.some((s) => unbalanced.some((u) => s.startsWith(u)));
+    const line = '<set-body>@{ if (a < b && c >= d) { xs.Where(x => x > 1); } return new List<int>(); }</set-body>';
+    const toks = await tokenize(line);
+    for (const op of ['<', '>=', '=>', '>']) {
+      const t = toks.find((x) => x.text === op && inExpr(x.scopes));
+      expect(t, op).toBeDefined();
+      expect(isUnbalanced(t!.scopes), `${op}: ${t!.scopes.join(' ')}`).toBe(true);
+    }
+    const generic = toks.filter((x) => x.text === '<' && inExpr(x.scopes)).pop()!;
+    expect(isUnbalanced(generic.scopes)).toBe(false);
+  });
+
   it('leaves plain XML files alone', async () => {
     const toks = await tokenize('<a b="@(x == 1)">@{ return 1; }</a>', 'text.xml');
     expect(toks.some((t) => inExpr(t.scopes))).toBe(false);
