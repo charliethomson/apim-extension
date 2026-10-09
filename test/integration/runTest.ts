@@ -18,7 +18,8 @@ async function main() {
   const withCSharp = process.env.APIM_IT_NO_CSHARP !== '1';
   const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
   if (withCSharp) {
-    const r = spawnSync(cli, [...cliArgs, '--install-extension', 'ms-dotnettools.csharp'], { stdio: 'inherit', shell: process.platform === 'win32' });
+    const root = process.getuid?.() === 0 ? ['--no-sandbox'] : [];
+    const r = spawnSync(cli, [...cliArgs, ...root, '--install-extension', 'ms-dotnettools.csharp'], { stdio: 'inherit', shell: process.platform === 'win32' });
     if (r.status !== 0) throw new Error('installing the C# extension failed');
   }
 
@@ -31,6 +32,8 @@ async function main() {
       ...cliArgs.filter((a) => a.startsWith('--extensions-dir') || a.startsWith('--user-data-dir')),
       '--skip-welcome',
       '--skip-release-notes',
+      // Containers run as root, where Electron refuses to start without these.
+      ...(process.getuid?.() === 0 ? ['--no-sandbox', '--disable-gpu'] : []),
       ...(withCSharp ? [] : ['--disable-extensions']),
     ],
     extensionTestsEnv: { APIM_IT_WITH_CSHARP: withCSharp ? '1' : '0', ...(process.env.APIM_DEBUG ? { APIM_DEBUG: '1' } : {}) },

@@ -123,6 +123,9 @@ standards/      vendored engineering standards (git submodule)
 
 ## Development
 
+[`.woodpecker/extension.ci.yml`](.woodpecker/extension.ci.yml) is the gate. It runs these, so
+passing them locally means passing CI:
+
 ```bash
 npm run typecheck
 ```
@@ -138,6 +141,10 @@ npm run test:integration
 ```bash
 dotnet build test/stubs
 ```
+
+CI also packages the `.vsix` and runs `npm audit`, which only fails on critical advisories. The
+coverage floor (80%, in `vitest.config.ts`) covers the parser, source maps, policy logic and the
+pure C# helpers. The VS Code glue in `src/features/` is covered by the integration suite instead.
 
 The unit tests run in milliseconds. The integration suite downloads VS Code and the C# extension
 into `.vscode-test/` on first run, then runs on a temporary copy of `test/fixtures/`. Set

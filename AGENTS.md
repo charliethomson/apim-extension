@@ -42,9 +42,15 @@ versioning and ignore the Rust-specific parts.
 - **Identifier:** the VS Code extension id is `thmsn.apim-policy` (marketplace form
   `publisher.name`). `dev.thmsn.apim-policy` is used anywhere a reverse-domain id fits.
 - **Testing:** unit tests run on vitest. The coverage floor of 80% applies to `src/parser/`,
-  `src/sourceMap.ts`, `src/policy/` and `src/csharp/shadow.ts`, which is the logic surface.
+  `src/sourceMap.ts`, `src/policy/` and the pure modules in `src/csharp/` (see
+  `vitest.config.ts`), which is the logic surface.
   The VS Code glue in `src/extension.ts` and `src/features/` is wiring, and it's covered by
   `@vscode/test-electron` integration tests instead.
+- **CI:** [`.woodpecker/extension.ci.yml`](.woodpecker/extension.ci.yml), on the Linux
+  Docker agents. It needs no secrets or host volumes, so the repo doesn't have to be marked
+  trusted. The `weekly-audit` cron has to be created in the Woodpecker UI before the scheduled
+  audit runs. The integration step downloads VS Code, the C# extension and the .NET 10 SDK each
+  run, so agents need internet access.
 - **Design:** see [`PLAN.md`](PLAN.md).
 
 ## Keeping standards current

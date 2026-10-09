@@ -1,0 +1,81 @@
+# The gate for the VS Code extension: typecheck, unit tests with the coverage floor, the stubs
+# compile check, packaging, the integration suite in VS Code with the C# extension, and the
+# dependency audit. There is no release pipeline: the registry has no kind for a .vsix yet,
+# and Marketplace publishing isn't set up (see README "Install").
+when:
+  - event: manual
+  - event: cron
+    cron: weekly-audit
+  - event: push
+    branch: main
+    path: &extension_paths
+      include:
+        - "src/**"
+        - "test/**"
+        - "data/**"
+        - "stubs/**"
+        - "syntaxes/**"
+        - "snippets/**"
+        - "tools/**"
+        - "package.json"
+        - "package-lock.json"
+        - "esbuild.mjs"
+        - "tsconfig.json"
+        - "vitest.config.ts"
+        - "language-configuration.json"
+        - ".vscodeignore"
+        - "scripts/ci/**"
+        - ".woodpecker/extension.ci.yml"
+  - event: pull_request
+    path: *extension_paths
+
+labels:
+  platform: linux/amd64
+
+clone:
+  git:
+    image: woodpeckerci/plugin-git
+    settings:
+      partial: false # full history and tags: the package version is derived from them
+      tags: true
+      submodule_override:
+        standards: https://github.com/charliethomson/standards.git
+
+steps:
+  unit:
+    image: node:22-bookworm
+    commands:
+      - npm ci
+      - npm run typecheck
+      - npm run test:coverage
+
+  stubs:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    commands:
+      - dotnet build test/stubs
+
+  package:
+    image: node:22-bookworm
+    commands:
+      - git config --global --add safe.directory "$CI_WORKSPACE"
+      - npm run package
+
+  integration:
+    image: node:22-bookworm
+    commands:
+      - scripts/ci/integration-deps.sh
+      # A plain Xvfb rather than xvfb-run, which hangs when it ends up as the container's PID 1.
+      - Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp >/dev/null 2>&1 &
+      - export DISPLAY=:99
+      - npm run test:integration
+
+  advisories:
+    image: node:22-bookworm
+    failure: ignore # visibility only; the next step is the gate
+    commands:
+      - npm audit
+
+  critical:
+    image: node:22-bookworm
+    commands:
+      - npm audit --audit-level=critical
