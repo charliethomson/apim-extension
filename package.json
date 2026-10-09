@@ -3,7 +3,7 @@
   "displayName": "Azure APIM Policies",
   "description": "Editor support for Azure API Management policy files: tolerant parsing, structural diagnostics and C# IntelliSense inside policy expressions.",
   "version": "0.0.1",
-  "publisher": "thmsn",
+  "publisher": "thmsn-dev",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -28,6 +28,16 @@
     "onLanguage:xml",
     "onLanguage:apim-policy"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In Restricted Mode, C# IntelliSense and type checking inside expressions are off, because they generate a .NET project and restore it from NuGet. Parsing, policy diagnostics and XML completion still work."
+    },
+    "virtualWorkspaces": {
+      "supported": "limited",
+      "description": "C# features inside expressions need the .NET SDK and a local file system."
+    }
+  },
   "contributes": {
     "languages": [
       {

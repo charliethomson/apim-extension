@@ -9,7 +9,12 @@ import { log } from '../log';
  * shadow's packages are still restoring, Newtonsoft "type not found" errors are held back and the
  * pull is retried.
  */
-export function registerCSharpDiagnostics(cache: DocumentCache, backend: () => Promise<ShadowBackend | undefined>): vscode.Disposable {
+export function registerCSharpDiagnostics(
+  cache: DocumentCache,
+  /** Fires when the backend may have become available (workspace trust granted). */
+  refreshAll: vscode.Event<void>,
+  backend: () => Promise<ShadowBackend | undefined>,
+): vscode.Disposable {
   const collection = vscode.languages.createDiagnosticCollection('apim-csharp');
   const timers = new Map<string, NodeJS.Timeout>();
   const tokens = new Map<string, vscode.CancellationTokenSource>();
@@ -71,6 +76,7 @@ export function registerCSharpDiagnostics(cache: DocumentCache, backend: () => P
   return vscode.Disposable.from(
     collection,
     vscode.workspace.onDidOpenTextDocument((d) => schedule(d, 0)),
+    refreshAll(() => vscode.workspace.textDocuments.forEach((d) => schedule(d, 0))),
     vscode.workspace.onDidChangeTextDocument((e) => schedule(e.document)),
     vscode.workspace.onDidCloseTextDocument((d) => {
       collection.delete(d.uri);

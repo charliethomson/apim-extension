@@ -28,10 +28,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const enabled = config.get<boolean>('enabled', true);
   const mode = config.get<'auto' | 'file' | 'virtual'>('mode', 'auto');
 
-  // The C# backend activates the C# extension, so create it only once a policy needs it.
+  // The C# backend activates the C# extension, so create it only once a policy needs it. It
+  // writes a .NET project to global storage and the C# server restores it from NuGet, so it stays
+  // off in untrusted workspaces until trust is granted.
   let backendPromise: Promise<ShadowBackend | undefined> | undefined;
   const backend = () => {
-    if (!enabled) return Promise.resolve(undefined);
+    if (!enabled || !vscode.workspace.isTrusted) return Promise.resolve(undefined);
     backendPromise ??= ShadowBackend.create(context, catalog, mode).then(
       (b) => {
         if (b) context.subscriptions.push(b);
@@ -54,9 +56,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerPolicyHover(cache, catalog),
     registerFragmentNavigation(cache, index),
     registerIntellisense({ cache, catalog, index, stubs, stubsUri, backend }),
-    registerCSharpDiagnostics(cache, () => (vscode.workspace.textDocuments.some((d) => d.languageId === LANGUAGE_ID) ? backend() : Promise.resolve(undefined))),
+    registerCSharpDiagnostics(cache, vscode.workspace.onDidGrantWorkspaceTrust, () => (vscode.workspace.textDocuments.some((d) => d.languageId === LANGUAGE_ID) ? backend() : Promise.resolve(undefined))),
     registerStatus(backend, enabled),
-    registerAllowlistLint(cache, allow, () => (vscode.workspace.textDocuments.some((d) => d.languageId === LANGUAGE_ID) ? backend() : Promise.resolve(undefined))),
+
+    registerAllowlistLint(cache, allow, vscode.workspace.onDidGrantWorkspaceTrust, () => (vscode.workspace.textDocuments.some((d) => d.languageId === LANGUAGE_ID) ? backend() : Promise.resolve(undefined))),
   );
 }
 

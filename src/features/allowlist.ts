@@ -20,7 +20,13 @@ interface Finding {
  * and suspicious member names, which catches what the syntax can't (instance members on
  * restricted types, aliases).
  */
-export function registerAllowlistLint(cache: DocumentCache, allow: Allowlist, backend: () => Promise<ShadowBackend | undefined>): vscode.Disposable {
+export function registerAllowlistLint(
+  cache: DocumentCache,
+  allow: Allowlist,
+  /** Fires when the backend may have become available (workspace trust granted). */
+  refreshAll: vscode.Event<void>,
+  backend: () => Promise<ShadowBackend | undefined>,
+): vscode.Disposable {
   const collection = vscode.languages.createDiagnosticCollection('apim-allowlist');
   const timers = new Map<string, NodeJS.Timeout>();
   const suspicious = allow.suspiciousMembers();
@@ -91,6 +97,7 @@ export function registerAllowlistLint(cache: DocumentCache, allow: Allowlist, ba
   return vscode.Disposable.from(
     collection,
     vscode.workspace.onDidOpenTextDocument((d) => schedule(d, 0)),
+    refreshAll(() => vscode.workspace.textDocuments.forEach((d) => schedule(d, 0))),
     vscode.workspace.onDidChangeTextDocument((e) => schedule(e.document)),
     vscode.workspace.onDidCloseTextDocument((d) => collection.delete(d.uri)),
     vscode.workspace.onDidChangeConfiguration((e) => {
