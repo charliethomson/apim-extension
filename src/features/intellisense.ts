@@ -58,7 +58,7 @@ function completionProvider(deps: IntellisenseDeps): vscode.CompletionItemProvid
         fragmentIds: await deps.index.fragmentIds(),
         namedValues: await deps.index.namedValues(),
       });
-      if (xml) return xml.map((i) => toXmlItem(document, i));
+      if (xml) return xml.map((i) => toXmlItem(document, i, position));
 
       const expr = expressionAt(doc, offset);
       if (!expr) return undefined;
@@ -78,10 +78,10 @@ function completionProvider(deps: IntellisenseDeps): vscode.CompletionItemProvid
   };
 }
 
-function toXmlItem(document: vscode.TextDocument, i: XmlItem): vscode.CompletionItem {
+function toXmlItem(document: vscode.TextDocument, i: XmlItem, position: vscode.Position): vscode.CompletionItem {
   const item = new vscode.CompletionItem(i.label, XML_KIND[i.kind]);
   item.insertText = new vscode.SnippetString(i.insert);
-  item.range = toRange(document, i.range);
+  item.range = onCursorLine(toRange(document, i.range), position);
   item.detail = i.detail;
   item.sortText = i.sortText;
   if (i.documentation) item.documentation = new vscode.MarkdownString(i.documentation);
@@ -97,19 +97,19 @@ async function keyItems(deps: IntellisenseDeps, document: vscode.TextDocument, d
   const range = expr.map.rangeToSource(access.range);
   if (!range) return undefined;
   const escaped = isEscapedFormat(doc) && !inCData(doc, expr);
-  const make = (name: string, kind: vscode.CompletionItemKind, detail?: string, docs?: string) => {
+  const make = (name: string, kind: vscode.CompletionItemKind, detail?: string, docs?: vscode.MarkdownString) => {
     const item = new vscode.CompletionItem(name, kind);
     item.insertText = escapeForDocument(access.quote ? `"${name}"` : name, escaped, false);
     item.range = toRange(document, range);
     item.detail = detail;
-    if (docs) item.documentation = new vscode.MarkdownString(docs);
+    if (docs) item.documentation = docs;
     item.sortText = `0${name}`;
     return item;
   };
   if (access.kind === 'header') return COMMON_HEADERS.map((h) => make(h, vscode.CompletionItemKind.Value, 'header'));
   const vars = await deps.index.variables(document);
   return vars.map((v) =>
-    make(v.name, vscode.CompletionItemKind.Variable, v.origin ?? `${v.element} in this file`, v.value ? `Value: \`${v.value}\`` : undefined),
+    make(v.name, vscode.CompletionItemKind.Variable, v.origin ?? `${v.element} in this file`, v.value ? valueMarkdown(v.value) : undefined),
   );
 }
 
@@ -121,7 +121,7 @@ async function forwardCompletion(
   context: vscode.CompletionContext,
   token: vscode.CancellationToken,
 ): Promise<vscode.CompletionList | undefined> {
-  const synced = await backend.sync(document, doc);
+  const synced = await syncCurrent(backend, document);
   if (!synced || token.isCancellationRequested) return undefined;
   const gen = synced.shadow.map.toGenerated(offset);
   if (gen === undefined) return undefined;
@@ -138,6 +138,9 @@ async function forwardCompletion(
   const escaped = isEscapedFormat(doc) && !inCData(doc, expr);
   const items: vscode.CompletionItem[] = [];
   for (const item of list.items) {
+    // Roslyn's complex edits (indexers, conversions, operators) run a command that opens and
+    // edits the shadow file itself, which would show it to the user and leave the policy alone.
+    if (item.command?.command === 'roslyn.client.completionComplexEdit') continue;
     const mapped = mapCompletion(item, synced, document, escaped);
     if (mapped) items.push(mapped);
   }
@@ -231,17 +234,20 @@ function hoverProvider(deps: IntellisenseDeps): vscode.HoverProvider {
       if (access?.kind === 'variable' && access.key) {
         const v = (await deps.index.variables(document)).find((x) => x.name === access.key);
         const range = expr.map.rangeToSource(access.range);
-        const md = new vscode.MarkdownString(
-          v
-            ? `**Variable** \`${v.name}\`\n\nSet by \`<${v.element}>\` ${v.origin ? `(${v.origin})` : 'in this file'}${v.value ? `\n\nValue: \`${v.value}\`` : ''}`
-            : `**Variable** \`${access.key}\`\n\nNot set in this file or a related fragment.`,
-        );
+        // Names and values come from workspace files, so they go in as text, never as Markdown.
+        const md = new vscode.MarkdownString().appendMarkdown('**Variable** ').appendText(access.key);
+        if (v) {
+          md.appendMarkdown('\n\nSet by ').appendText(`<${v.element}> ${v.origin ? `(${v.origin})` : 'in this file'}`);
+          if (v.value) md.appendMarkdown('\n\n').appendMarkdown(valueMarkdown(v.value).value);
+        } else {
+          md.appendMarkdown('\n\nNot set in this file or a related fragment.');
+        }
         return new vscode.Hover(md, range ? toRange(document, range) : undefined);
       }
 
       const backend = await deps.backend();
       if (backend) {
-        const synced = await backend.sync(document, doc);
+        const synced = await syncCurrent(backend, document);
         const gen = synced?.shadow.map.toGenerated(offset);
         if (synced && gen !== undefined && !token.isCancellationRequested) {
           const hovers = await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', synced.csDoc.uri, synced.csDoc.positionAt(gen));
@@ -277,7 +283,7 @@ function signatureProvider(deps: IntellisenseDeps): vscode.SignatureHelpProvider
       const offset = document.offsetAt(position);
       if (!expressionAt(doc, offset)) return undefined;
       const backend = await deps.backend();
-      const synced = backend && (await backend.sync(document, doc));
+      const synced = backend && (await syncCurrent(backend, document));
       const gen = synced?.shadow.map.toGenerated(offset);
       if (!synced || gen === undefined || token.isCancellationRequested) return undefined;
       return vscode.commands.executeCommand<vscode.SignatureHelp>(
@@ -318,7 +324,7 @@ function definitionProvider(deps: IntellisenseDeps): vscode.DefinitionProvider {
       }
 
       const backend = await deps.backend();
-      const synced = backend && (await backend.sync(document, doc));
+      const synced = backend && (await syncCurrent(backend, document));
       const gen = synced?.shadow.map.toGenerated(offset);
       if (!synced || gen === undefined || token.isCancellationRequested) return undefined;
       const results = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
@@ -341,6 +347,29 @@ function definitionProvider(deps: IntellisenseDeps): vscode.DefinitionProvider {
       return out;
     },
   };
+}
+
+/**
+ * VS Code drops completion items whose range spans lines or doesn't contain the cursor. Ranges
+ * from a half-typed document can (an unclosed attribute value runs to the next quote), so clamp
+ * them to the cursor's line.
+ */
+function onCursorLine(range: vscode.Range, position: vscode.Position): vscode.Range {
+  const start = range.start.line === position.line && range.start.isBeforeOrEqual(position) ? range.start : position.with({ character: 0 });
+  const end = range.end.line === position.line && range.end.isAfterOrEqual(position) ? range.end : position;
+  return new vscode.Range(start, end);
+}
+
+/** A set-variable value as a code block, so workspace text can't render as Markdown. */
+function valueMarkdown(value: string): vscode.MarkdownString {
+  return new vscode.MarkdownString().appendText('Value:').appendCodeblock(value, 'csharp');
+}
+
+/** The shadow for the document's current version, or undefined if it moved on meanwhile. */
+async function syncCurrent(backend: ShadowBackend, document: vscode.TextDocument): Promise<SyncedShadow | undefined> {
+  const version = document.version;
+  const synced = await backend.sync(document);
+  return synced && synced.version === version && document.version === version ? synced : undefined;
 }
 
 function inCData(doc: Document, expr: Expression): boolean {

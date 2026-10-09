@@ -1,3 +1,4 @@
+import { open } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { LANGUAGE_ID, type DocumentCache } from '../documents';
 import { looksLikePolicy } from '../parser/detect';
@@ -19,21 +20,29 @@ export class PolicyIndex implements vscode.Disposable {
   private readonly entries = new Map<string, Entry>();
   private readonly apiOpsNamedValues = new Set<string>();
   private readonly disposables: vscode.Disposable[] = [];
-  private readonly ready: Promise<void>;
+  private scanned?: Promise<void>;
 
   constructor(private readonly cache: DocumentCache) {
     const watcher = vscode.workspace.createFileSystemWatcher('**/*.xml');
     this.disposables.push(
       watcher,
-      watcher.onDidCreate((u) => void this.updateFromDisk(u)),
+      watcher.onDidCreate((u) => this.scanned && !ignored(u) && void this.updateFromDisk(u)),
       watcher.onDidChange((u) => {
-        if (!vscode.workspace.textDocuments.some((d) => d.uri.toString() === u.toString())) void this.updateFromDisk(u);
+        if (!this.scanned || ignored(u) || vscode.workspace.textDocuments.some((d) => d.uri.toString() === u.toString())) return;
+        void this.updateFromDisk(u);
       }),
       watcher.onDidDelete((u) => this.entries.delete(u.toString())),
       vscode.workspace.onDidChangeTextDocument((e) => this.updateFromDocument(e.document)),
       vscode.workspace.onDidOpenTextDocument((d) => this.updateFromDocument(d)),
     );
-    this.ready = this.scan();
+  }
+
+  /**
+   * The workspace scan starts the first time a policy needs it, not on activation: the
+   * extension activates for every XML file, including .csproj and web.config.
+   */
+  private get ready(): Promise<void> {
+    return (this.scanned ??= this.scan());
   }
 
   async fragmentFiles(id: string): Promise<vscode.Uri[]> {
@@ -88,19 +97,27 @@ export class PolicyIndex implements vscode.Disposable {
       const parts = u.path.split('/');
       this.apiOpsNamedValues.add(parts[parts.length - 2]);
     }
-    await Promise.all(files.map((u) => this.updateFromDisk(u)));
+    const queue = files.filter((u) => !ignored(u));
+    const worker = async () => {
+      for (let u = queue.pop(); u; u = queue.pop()) await this.updateFromDisk(u);
+    };
+    await Promise.all(Array.from({ length: 16 }, worker));
     vscode.workspace.textDocuments.forEach((d) => this.updateFromDocument(d));
   }
 
   private async updateFromDisk(uri: vscode.Uri): Promise<void> {
-    let text: string;
+    let text: string | undefined;
     try {
+      // Decide from the first 4 KB; only policies are read in full, and only up to a sane size.
+      const head = await readHead(uri, 4096);
+      if (head === undefined || !looksLikePolicy(head)) {
+        this.entries.delete(uri.toString());
+        return;
+      }
+      const stat = await vscode.workspace.fs.stat(uri);
+      if (stat.size > MAX_POLICY_BYTES) return;
       text = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
     } catch {
-      return;
-    }
-    if (!looksLikePolicy(text)) {
-      this.entries.delete(uri.toString());
       return;
     }
     const summary = summarize(parse(text));
@@ -111,3 +128,28 @@ export class PolicyIndex implements vscode.Disposable {
     this.disposables.forEach((d) => d.dispose());
   }
 }
+
+/** APIM caps a fragment at 512 KB; a file far bigger than that isn't a policy. */
+const MAX_POLICY_BYTES = 2 * 1024 * 1024;
+
+function ignored(uri: vscode.Uri): boolean {
+  return /\/(node_modules|\.git|bin|obj)\//.test(uri.path);
+}
+
+/** The first `bytes` of a file, without reading the rest when it's on local disk. */
+async function readHead(uri: vscode.Uri, bytes: number): Promise<string | undefined> {
+  if (uri.scheme === 'file') {
+    const handle = await open(uri.fsPath, 'r');
+    try {
+      const buf = Buffer.alloc(bytes);
+      const { bytesRead } = await handle.read(buf, 0, bytes, 0);
+      return new TextDecoder().decode(buf.subarray(0, bytesRead));
+    } finally {
+      await handle.close();
+    }
+  }
+  const stat = await vscode.workspace.fs.stat(uri);
+  if (stat.size > MAX_POLICY_BYTES) return undefined;
+  return new TextDecoder().decode((await vscode.workspace.fs.readFile(uri)).subarray(0, bytes));
+}
+

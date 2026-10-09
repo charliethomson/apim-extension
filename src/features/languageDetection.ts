@@ -1,12 +1,6 @@
 import * as vscode from 'vscode';
 import { LANGUAGE_ID } from '../documents';
-
-const POLICY_ROOT = /^﻿?\s*(?:<\?[\s\S]*?\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<(?:policies|fragment)[\s/>]/;
-
-/** True when the text's root element is <policies> or <fragment>. */
-export function looksLikePolicy(text: string): boolean {
-  return POLICY_ROOT.test(text.slice(0, 4096));
-}
+import { looksLikePolicy } from '../parser/detect';
 
 /**
  * Switches XML documents to apim-policy when they match `apimPolicy.files.include` or, with

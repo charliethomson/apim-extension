@@ -11,6 +11,13 @@ describe('LineIndex', () => {
     expect(idx.positionAt(4)).toEqual({ line: 1, character: 1 });
   });
 
+  it('counts every line break the C# server does', () => {
+    const idx2 = new LineIndex('a\rb\nc\r\nd\u2028e\u0085f');
+    expect([1, 2, 3, 4, 5].map((line) => idx2.offsetAt({ line, character: 0 }))).toEqual([2, 4, 7, 9, 11]);
+    expect(idx2.positionAt(7)).toEqual({ line: 3, character: 0 });
+    expect(idx2.offsetAt({ line: 2, character: 9 })).toBe(5); // clamped before the CRLF
+  });
+
   it('clamps out-of-range positions', () => {
     expect(idx.offsetAt({ line: 0, character: 99 })).toBe(2);
     expect(idx.offsetAt({ line: 99, character: 0 })).toBe(8);
@@ -53,6 +60,16 @@ describe('mapDiagnostics', () => {
         { ...diag('Nope', 4, 'CS1061'), code: { value: 'CS1061' } },
       ]).map((d) => d.code),
     ).toEqual(['CS1061']);
+  });
+
+  it('puts errors on a generated method header onto the expression start', () => {
+    const blockSrc = '<a>@{ if (x) { return 1; } }</a>';
+    const block = generateShadow(parse(blockSrc), undefined);
+    const idx = new LineIndex(block.text);
+    const at = block.text.indexOf('__E0');
+    const [d] = mapDiagnostics(block, idx, [{ range: { start: idx.positionAt(at), end: idx.positionAt(at + 4) }, severity: 1, code: 'CS0161', message: 'not all code paths return a value' }]);
+    expect(blockSrc.slice(d.range.start, d.range.end)).toBe('@{');
+    expect(d.code).toBe('CS0161');
   });
 
   it('recognises restore-pending errors', () => {

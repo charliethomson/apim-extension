@@ -254,6 +254,18 @@ describe('parse: XML structure', () => {
     expect(codes('<a x="1"')).toEqual(['unterminated-tag']);
   });
 
+  it('does not let an unclosed plain value swallow the next lines', () => {
+    const doc = parse('<a>\n<when condition="\n<set-header name="x" />\n</a>');
+    expect(doc.diagnostics.map((d) => d.code)).toContain('unterminated-attribute');
+    expect(elements(doc.children).map((e) => e.name)).toEqual(['a', 'when', 'set-header']);
+  });
+
+  it('still allows a plain value that continues on the next line', () => {
+    const doc = parse('<a x="one\ntwo" />');
+    expect(doc.diagnostics).toEqual([]);
+    expect(doc.root?.attributes[0].value).toBe('one\ntwo');
+  });
+
   it('reports unterminated comments, CDATA and declarations', () => {
     expect(parse('<a><!-- x').diagnostics.map((d) => d.code)).toContain('unterminated-comment');
     expect(parse('<a><![CDATA[ x').diagnostics.map((d) => d.code)).toContain('unterminated-cdata');

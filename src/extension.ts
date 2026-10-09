@@ -34,7 +34,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let backendPromise: Promise<ShadowBackend | undefined> | undefined;
   const backend = () => {
     if (!enabled || !vscode.workspace.isTrusted) return Promise.resolve(undefined);
-    backendPromise ??= ShadowBackend.create(context, catalog, mode).then(
+    backendPromise ??= ShadowBackend.create(context, catalog, mode, (d) => cache.get(d)).then(
       (b) => {
         if (b) context.subscriptions.push(b);
         log().info(b ? `C# backend: ${b.mode} mode, diagnostics ${b.canPullDiagnostics ? 'available' : 'unavailable'}` : 'C# backend: C# extension not installed');

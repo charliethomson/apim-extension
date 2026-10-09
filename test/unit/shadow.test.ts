@@ -111,6 +111,17 @@ describe('generateShadow', () => {
     expect(t).toContain('from a.xml');
   });
 
+  it('keeps a hostile source path on the comment line', () => {
+    for (const brk of ['\n', '\r', '\u0085', '\u2028', '\u2029']) {
+      const shadow = generateShadow(parse('<a x="@(1)"/>'), undefined, {
+        header: '#:package X@1',
+        sourceName: `policies/x${brk}#:sdk Evil.Sdk@6.6.6${brk}// .policy.xml`,
+      });
+      const lines = shadow.text.split(/\r\n|[\r\n\u0085\u2028\u2029]/);
+      expect(lines.filter((l) => l.startsWith('#:'))).toEqual(['#:package X@1']);
+    }
+  });
+
   it('rewrites named values in code but not in strings or comments', () => {
     const src = '<a x="@({{n}} + &quot;{{s}}&quot; /* {{c}} */)"/>';
     const doc = parse(src);

@@ -193,6 +193,8 @@ reference and the policy expressions page.
 - Named values come from `{{…}}` usage in the workspace and APIOps `namedValues/` folder names.
   Display names in `namedValueInformation.json`, Bicep/ARM templates and live APIM instances aren't read.
 - Highlighting in the escaped `xml` format treats `&quot;…&quot;` as code, not as a C# string.
+- With format-on-save (or another save participant) enabled for C#, the hidden shadow file is
+  left unsaved after edits so the participant can't rewrite it. Hot exit backs it up quietly.
 - Formatting isn't implemented.
 
 ## Licence and attribution
