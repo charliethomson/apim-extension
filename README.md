@@ -72,7 +72,9 @@ chains complete from the stubs.
 
 ## Install
 
-Build a `.vsix` and install it:
+Install **Azure APIM Policies** (`thmsn-dev.apim-policy`) from the
+[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=thmsn-dev.apim-policy),
+or build a `.vsix` and install it:
 
 ```bash
 npm ci

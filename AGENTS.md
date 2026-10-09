@@ -39,7 +39,7 @@ versioning and ignore the Rust-specific parts.
   `package.json` `version` stays a placeholder (`0.0.1`). `npm run package` derives
   `MAJOR.MINOR.<count>` with `scripts/ci/version.sh` and passes it to vsce, so the installed
   extension reports the real version.
-- **Identifier:** the VS Code extension id is `thmsn.apim-policy` (marketplace form
+- **Identifier:** the VS Code extension id is `thmsn-dev.apim-policy` (marketplace form
   `publisher.name`). `dev.thmsn.apim-policy` is used anywhere a reverse-domain id fits.
 - **Testing:** unit tests run on vitest. The coverage floor of 80% applies to `src/parser/`,
   `src/sourceMap.ts`, `src/policy/` and the pure modules in `src/csharp/` (see
@@ -48,7 +48,7 @@ versioning and ignore the Rust-specific parts.
   `@vscode/test-electron` integration tests instead.
 - **Release:** [`.woodpecker/extension.release.yml`](.woodpecker/extension.release.yml)
   publishes to the Visual Studio Marketplace on `v*` tags or by hand from `main`. It needs the
-  `vsce_pat` secret (an Azure DevOps token with Marketplace (Manage) scope for the `thmsn`
+  `vsce_pat` secret (an Azure DevOps token with Marketplace (Manage) scope for the `thmsn-dev`
   publisher), provisioned by hand in Woodpecker.
 - **CI:** [`.woodpecker/extension.ci.yml`](.woodpecker/extension.ci.yml), on the Linux
   Docker agents. It needs no secrets or host volumes, so the repo doesn't have to be marked
