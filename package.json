@@ -53,7 +53,11 @@
         },
         "tokenTypes": {
           "meta.embedded.expression.cs": "other",
-          "meta.embedded.block.cs": "other"
+          "meta.embedded.block.cs": "other",
+          "meta.embedded.expression.cs string": "string",
+          "meta.embedded.block.cs string": "string",
+          "meta.embedded.expression.cs comment": "comment",
+          "meta.embedded.block.cs comment": "comment"
         },
         "unbalancedBracketScopes": [
           "keyword.operator.relational.cs",
@@ -77,7 +81,11 @@
         },
         "tokenTypes": {
           "meta.embedded.expression.cs": "other",
-          "meta.embedded.block.cs": "other"
+          "meta.embedded.block.cs": "other",
+          "meta.embedded.expression.cs string": "string",
+          "meta.embedded.block.cs string": "string",
+          "meta.embedded.expression.cs comment": "comment",
+          "meta.embedded.block.cs comment": "comment"
         },
         "unbalancedBracketScopes": [
           "keyword.operator.relational.cs",
