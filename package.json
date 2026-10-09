@@ -46,7 +46,24 @@
       {
         "language": "apim-policy",
         "scopeName": "text.xml.apim",
-        "path": "./syntaxes/apim-policy.tmLanguage.json"
+        "path": "./syntaxes/apim-policy.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.expression.cs": "csharp",
+          "meta.embedded.block.cs": "csharp"
+        },
+        "tokenTypes": {
+          "meta.embedded.expression.cs": "other",
+          "meta.embedded.block.cs": "other"
+        },
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational.cs",
+          "keyword.operator.arrow.cs",
+          "punctuation.accessor.pointer.cs",
+          "keyword.operator.bitwise.shift.cs",
+          "keyword.operator.assignment.compound.bitwise.cs",
+          "keyword.operator.comparison.cs",
+          "keyword.operator.logical.cs"
+        ]
       },
       {
         "scopeName": "apim.expression.injection",
@@ -57,7 +74,20 @@
         "embeddedLanguages": {
           "meta.embedded.expression.cs": "csharp",
           "meta.embedded.block.cs": "csharp"
-        }
+        },
+        "tokenTypes": {
+          "meta.embedded.expression.cs": "other",
+          "meta.embedded.block.cs": "other"
+        },
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational.cs",
+          "keyword.operator.arrow.cs",
+          "punctuation.accessor.pointer.cs",
+          "keyword.operator.bitwise.shift.cs",
+          "keyword.operator.assignment.compound.bitwise.cs",
+          "keyword.operator.comparison.cs",
+          "keyword.operator.logical.cs"
+        ]
       }
     ],
     "configuration": {
