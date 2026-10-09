@@ -11,17 +11,31 @@ export interface LinePos {
   character: number;
 }
 
+/**
+ * Line starts as the C# server counts them: CRLF, CR, LF, NEL, LS and PS all end a line. That
+ * must match the server, or one unusual line break in an expression shifts every later
+ * diagnostic.
+ */
 export class LineIndex {
   private readonly starts: number[] = [0];
+  /** End of each line's content (before its line break). */
+  private readonly ends: number[] = [];
 
   constructor(private readonly text: string) {
-    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) this.starts.push(i + 1);
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      if (c === 13 || c === 10 || c === 0x85 || c === 0x2028 || c === 0x2029) {
+        this.ends.push(i);
+        if (c === 13 && text.charCodeAt(i + 1) === 10) i++;
+        this.starts.push(i + 1);
+      }
+    }
+    this.ends.push(text.length);
   }
 
   offsetAt(p: LinePos): number {
     const line = Math.min(Math.max(p.line, 0), this.starts.length - 1);
-    const lineEnd = line + 1 < this.starts.length ? this.starts[line + 1] - 1 : this.text.length;
-    return Math.min(this.starts[line] + Math.max(p.character, 0), lineEnd);
+    return Math.min(this.starts[line] + Math.max(p.character, 0), this.ends[line]);
   }
 
   positionAt(offset: number): LinePos {
@@ -33,7 +47,7 @@ export class LineIndex {
       if (this.starts[mid] <= o) lo = mid;
       else hi = mid - 1;
     }
-    return { line: lo, character: o - this.starts[lo] };
+    return { line: lo, character: Math.min(o, this.ends[lo]) - this.starts[lo] };
   }
 }
 
@@ -68,7 +82,16 @@ export function mapDiagnostics(shadow: Shadow, index: LineIndex, diags: readonly
     const start = index.offsetAt(d.range.start);
     const end = index.offsetAt(d.range.end);
     const method = methodAt(shadow, start);
-    if (!method) continue;
+    if (!method) {
+      // Errors about the method as a whole (CS0161: not all code paths return a value) land on
+      // its generated header. Put them on the expression's @( or @{.
+      const owner = shadow.methods.find((m) => start >= m.headerRange.start && start < m.headerRange.end);
+      if (owner) {
+        const at = owner.expression.range.start;
+        out.push({ range: { start: at, end: at + 2 }, message: d.message, code, severity: d.severity === 2 ? 'warning' : 'error' });
+      }
+      continue;
+    }
     const clamped = { start: Math.max(start, method.codeRange.start), end: Math.min(Math.max(end, start), method.codeRange.end) };
     const range = shadow.map.rangeToSource(clamped);
     if (!range) continue;

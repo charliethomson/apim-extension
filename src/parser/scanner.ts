@@ -306,9 +306,7 @@ class Parser {
     }
 
     // Plain value, or an expression that couldn't be scanned.
-    const valueEnd = this.isExpressionStart(at)
-      ? this.findAttributeEnd(valueStart, quote)
-      : this.src.indexOf(quote, valueStart);
+    const valueEnd = this.isExpressionStart(at) ? this.findAttributeEnd(valueStart, quote) : this.plainValueEnd(valueStart, quote);
     if (valueEnd === -1) {
       const stop = this.recoverUnterminatedAttribute(valueStart);
       if (!this.isExpressionStart(at)) {
@@ -345,6 +343,19 @@ class Parser {
     re.lastIndex = from;
     const m = re.exec(this.src);
     return m && m.index < limit ? m.index : -1;
+  }
+
+  /**
+   * The closing quote of a plain value, or -1 when the value runs into a new line that starts
+   * with a tag (an unclosed value being typed), so it doesn't swallow the markup that follows.
+   */
+  private plainValueEnd(from: number, quote: string): number {
+    const close = this.src.indexOf(quote, from);
+    if (close === -1) return -1;
+    const boundary = /\n\s*</g;
+    boundary.lastIndex = from;
+    const b = boundary.exec(this.src);
+    return b && b.index < close ? -1 : close;
   }
 
   /** Ends an unterminated attribute value at the end of its line, or before `/>` or `>`. */

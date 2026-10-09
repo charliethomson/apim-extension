@@ -36,11 +36,11 @@ export function registerCSharpDiagnostics(
     tokens.set(key, cts);
     const version = document.version;
     try {
-      const synced = await b.sync(document, doc);
+      const synced = await b.sync(document);
       if (!synced || cts.token.isCancellationRequested) return;
       const raw = await b.diagnostics(synced, cts.token);
       log().debug(`C# pull for ${document.uri.path}: ${raw ? raw.map((d) => d.code).join(', ') || 'none' : 'no result'}`);
-      if (!raw || cts.token.isCancellationRequested || document.version !== version) return;
+      if (!raw || cts.token.isCancellationRequested || document.version !== version || synced.version !== version) return;
       const mapped = mapDiagnostics(synced.shadow, synced.index, raw);
       const pending = mapped.filter(isRestorePending);
       const shown = mapped.filter((d) => !isRestorePending(d));

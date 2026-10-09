@@ -58,7 +58,14 @@ export function registerAllowlistLint(
     );
   };
 
+  const tokens = new Map<string, vscode.CancellationTokenSource>();
+
   const refresh = async (document: vscode.TextDocument) => {
+    const key = document.uri.toString();
+    tokens.get(key)?.cancel();
+    const cts = new vscode.CancellationTokenSource();
+    tokens.set(key, cts);
+    const current = () => !cts.token.isCancellationRequested && !document.isClosed;
     if (document.languageId !== LANGUAGE_ID || document.isClosed) return;
     const version = document.version;
     const doc = cache.get(document);
@@ -72,11 +79,12 @@ export function registerAllowlistLint(
     publish(document, syntactic);
 
     const b = doc.expressions.length > 0 ? await backend() : undefined;
-    if (!b) return;
+    if (!b || !current()) return;
     try {
-      const synced = await b.sync(document, doc);
-      if (!synced || document.version !== version) return;
-      const semantic = await semanticFindings(synced, allow, suspicious);
+      const synced = await b.sync(document);
+      if (!synced || document.version !== version || synced.version !== version) return;
+      const semantic = await semanticFindings(synced, allow, suspicious, cts.token);
+      if (!current()) return;
       if (document.version !== version) return;
       publish(document, [...syntactic, ...semantic]);
     } catch (e) {
@@ -99,7 +107,11 @@ export function registerAllowlistLint(
     vscode.workspace.onDidOpenTextDocument((d) => schedule(d, 0)),
     refreshAll(() => vscode.workspace.textDocuments.forEach((d) => schedule(d, 0))),
     vscode.workspace.onDidChangeTextDocument((e) => schedule(e.document)),
-    vscode.workspace.onDidCloseTextDocument((d) => collection.delete(d.uri)),
+    vscode.workspace.onDidCloseTextDocument((d) => {
+      tokens.get(d.uri.toString())?.cancel();
+      tokens.delete(d.uri.toString());
+      collection.delete(d.uri);
+    }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('apimPolicy.allowedTypes')) vscode.workspace.textDocuments.forEach((d) => schedule(d, 0));
     }),
@@ -110,7 +122,7 @@ export function registerAllowlistLint(
 /** At most this many hover requests per pass, to bound the cost on huge policies. */
 const HOVER_BUDGET = 300;
 
-async function semanticFindings(synced: SyncedShadow, allow: Allowlist, suspicious: Set<string>): Promise<Finding[]> {
+async function semanticFindings(synced: SyncedShadow, allow: Allowlist, suspicious: Set<string>, token: vscode.CancellationToken): Promise<Finding[]> {
   const uri = synced.csDoc.uri;
   const legend = await vscode.commands.executeCommand<vscode.SemanticTokensLegend>('vscode.provideDocumentSemanticTokensLegend', uri);
   const tokens = await vscode.commands.executeCommand<vscode.SemanticTokens>('vscode.provideDocumentSemanticTokens', uri);
@@ -124,7 +136,7 @@ async function semanticFindings(synced: SyncedShadow, allow: Allowlist, suspicio
     const name = synced.shadow.text.slice(start, start + t.length);
     const isType = TYPE_TOKENS.has(t.type);
     if (!isType && !(MEMBER_TOKENS.has(t.type) && suspicious.has(name))) continue;
-    if (budget-- <= 0) break;
+    if (budget-- <= 0 || token.isCancellationRequested) break;
     const hover = await hoverText(uri, synced.csDoc.positionAt(start), hoverCache, `${t.type}:${name}:${isType ? '' : start}`);
     const sym = parseHoverSymbol(hover);
     const range = synced.shadow.map.rangeToSource({ start, end: start + t.length });

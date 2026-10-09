@@ -14,6 +14,7 @@
  */
 
 import { execFile } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { Document } from '../parser/ast';
@@ -27,6 +28,8 @@ const VIRTUAL_SCHEME = 'apim-cs';
 export type BackendMode = 'file' | 'virtual';
 
 export interface SyncedShadow {
+  /** The policy document version this shadow was generated from. */
+  version: number;
   shadow: Shadow;
   index: LineIndex;
   /** The open C# document holding the shadow. */
@@ -62,6 +65,8 @@ export class ShadowBackend implements vscode.Disposable {
     private readonly storage: vscode.Uri,
     private readonly stubs: string,
     private readonly catalog: Catalog,
+    /** Parses a policy document at its current version (the shared cache). */
+    private readonly parseFor: (document: vscode.TextDocument) => Document,
   ) {
     if (mode === 'virtual') {
       const provider: vscode.TextDocumentContentProvider = {
@@ -77,7 +82,12 @@ export class ShadowBackend implements vscode.Disposable {
    * Activates the C# extension and picks a mode. Returns undefined when the C# extension isn't
    * installed or doesn't expose what we need.
    */
-  static async create(context: vscode.ExtensionContext, catalog: Catalog, preferred: 'auto' | BackendMode): Promise<ShadowBackend | undefined> {
+  static async create(
+    context: vscode.ExtensionContext,
+    catalog: Catalog,
+    preferred: 'auto' | BackendMode,
+    parseFor: (document: vscode.TextDocument) => Document,
+  ): Promise<ShadowBackend | undefined> {
     const ext = vscode.extensions.getExtension<CSharpApi>(CSHARP_EXTENSION_ID);
     if (!ext) return undefined;
     const api = await ext.activate();
@@ -86,9 +96,14 @@ export class ShadowBackend implements vscode.Disposable {
     const mode = preferred === 'auto' ? ((await dotnetSdkMajor()) >= 10 ? 'file' : 'virtual') : preferred;
     // globalStorageUri can use the vscode-userdata: scheme, which the C# server treats as a loose
     // file with no semantics. The shadow has to be a plain file: URI to load as a project.
-    const storage = vscode.Uri.file(vscode.Uri.joinPath(context.globalStorageUri, 'shadow').fsPath);
-    if (mode === 'file') await vscode.workspace.fs.createDirectory(storage);
-    return new ShadowBackend(mode, api ?? {}, storage, stubs, catalog);
+    // Global storage is shared by every window, so each window gets its own folder.
+    const root = vscode.Uri.file(vscode.Uri.joinPath(context.globalStorageUri, 'shadow').fsPath);
+    const storage = vscode.Uri.joinPath(root, vscode.env.sessionId.replace(/[^\w-]/g, '_'));
+    if (mode === 'file') {
+      await removeStaleSessions(root);
+      await vscode.workspace.fs.createDirectory(storage);
+    }
+    return new ShadowBackend(mode, api ?? {}, storage, stubs, catalog, parseFor);
   }
 
   get canPullDiagnostics(): boolean {
@@ -100,21 +115,29 @@ export class ShadowBackend implements vscode.Disposable {
     return vscode.Uri.joinPath(context.extensionUri, 'stubs', 'ApimContext.cs');
   }
 
-  /** Brings the shadow for `document` up to date with `doc` (its parse) and returns it. */
-  sync(document: vscode.TextDocument, doc: Document): Promise<SyncedShadow | undefined> {
+  /**
+   * Brings the shadow for `document` up to date and returns it. Check `version` on the result:
+   * when the document changes while an update is queued, the result can already be behind.
+   */
+  sync(document: vscode.TextDocument): Promise<SyncedShadow | undefined> {
+    if (document.isClosed) return Promise.resolve(undefined);
     const key = document.uri.toString();
     let state = this.states.get(key);
     if (!state) this.states.set(key, (state = { policyVersion: -1 }));
     if (state.synced && state.policyVersion === document.version && !state.synced.csDoc.isClosed) return Promise.resolve(state.synced);
     const s = state;
     const run = async (): Promise<SyncedShadow | undefined> => {
+      // Read the version and the parse together, when the update actually runs: an update
+      // queued behind another must not record an older parse under a newer version.
+      if (document.isClosed || this.states.get(key) !== s) return undefined;
+      if (s.synced && s.policyVersion === document.version && !s.synced.csDoc.isClosed) return s.synced;
       const version = document.version;
-      const shadow = generateShadow(doc, this.catalog, this.shadowOptions(document));
+      const shadow = generateShadow(this.parseFor(document), this.catalog, this.shadowOptions(document));
       const footerStart = shadow.text.length - this.stubs.length;
       const csDoc = await this.write(s, document, shadow.text);
-      if (!csDoc) return undefined;
+      if (!csDoc || this.states.get(key) !== s) return undefined;
       s.policyVersion = version;
-      s.synced = { shadow, index: new LineIndex(shadow.text), csDoc, footerStart };
+      s.synced = { version, shadow, index: new LineIndex(shadow.text), csDoc, footerStart };
       return s.synced;
     };
     // Serialise updates per document.
@@ -137,12 +160,27 @@ export class ShadowBackend implements vscode.Disposable {
     const key = document.uri.toString();
     const state = this.states.get(key);
     this.states.delete(key);
-    if (state?.file) void vscode.workspace.fs.delete(vscode.Uri.joinPath(state.file, '..'), { recursive: true, useTrash: false }).then(undefined, () => undefined);
+    // Delete after any in-flight update has finished writing.
+    const file = state?.file;
+    if (file) {
+      void (state.pending ?? Promise.resolve())
+        .then(undefined, () => undefined)
+        .then(() => vscode.workspace.fs.delete(vscode.Uri.joinPath(file, '..'), { recursive: true, useTrash: false }))
+        .then(undefined, () => undefined);
+    }
     if (this.mode === 'virtual') this.virtualText.delete(this.virtualUri(document).toString());
   }
 
   dispose(): void {
     this.disposables.forEach((d) => d.dispose());
+    // Don't leave this window's expression code behind in global storage.
+    if (this.mode === 'file') {
+      try {
+        rmSync(this.storage.fsPath, { recursive: true, force: true });
+      } catch {
+        // Best effort; stale folders are swept on the next start.
+      }
+    }
   }
 
   private shadowOptions(document: vscode.TextDocument) {
@@ -171,7 +209,7 @@ export class ShadowBackend implements vscode.Disposable {
       if (csDoc.languageId !== 'csharp') csDoc = await vscode.languages.setTextDocumentLanguage(csDoc, 'csharp');
       if (changed && csDoc.getText() !== text) {
         this.virtualChanged.fire(uri);
-        csDoc = await waitForText(uri, text);
+        return waitForText(uri, text);
       }
       return csDoc;
     }
@@ -217,17 +255,38 @@ export function dotnetSdkMajor(): Promise<number> {
   });
 }
 
+/** Removes other windows' shadow folders that haven't been touched for a week. */
+async function removeStaleSessions(root: vscode.Uri): Promise<void> {
+  let entries: [string, vscode.FileType][];
+  try {
+    entries = await vscode.workspace.fs.readDirectory(root);
+  } catch {
+    return;
+  }
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  for (const [name, type] of entries) {
+    const uri = vscode.Uri.joinPath(root, name);
+    try {
+      const stat = await vscode.workspace.fs.stat(uri);
+      if (type !== vscode.FileType.Directory || stat.mtime < cutoff) await vscode.workspace.fs.delete(uri, { recursive: true, useTrash: false });
+    } catch {
+      // In use or already gone.
+    }
+  }
+}
+
 function hash(s: string): string {
   return createHash('sha1').update(s).digest('hex').slice(0, 16);
 }
 
-async function waitForText(uri: vscode.Uri, text: string): Promise<vscode.TextDocument> {
+/** Waits for a virtual document to show `text`; undefined if it doesn't within 2 seconds. */
+async function waitForText(uri: vscode.Uri, text: string): Promise<vscode.TextDocument | undefined> {
   const doc = await vscode.workspace.openTextDocument(uri);
   if (doc.getText() === text) return doc;
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       sub.dispose();
-      resolve(doc);
+      resolve(undefined);
     }, 2000);
     const sub = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() === uri.toString() && e.document.getText() === text) {
