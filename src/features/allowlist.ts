@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import type { Allowlist } from '../csharp/allowedTypes';
-import { lintAllowedTypes } from '../csharp/allowedTypes';
+import { lintAllowedTypes, lintReferences } from '../csharp/allowedTypes';
 import type { ShadowBackend, SyncedShadow } from '../csharp/backend';
+import type { CSharpEngine } from '../csharp/lang/service';
 import { methodAt } from '../csharp/shadow';
 import { decodeSemanticTokens, MEMBER_TOKENS, parseHoverSymbol, TYPE_TOKENS } from '../csharp/semanticLint';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
@@ -16,9 +17,9 @@ interface Finding {
 
 /**
  * Flags types and members outside APIM's allowlist. The syntactic pass runs on every change;
- * when the C# extension is available, a semantic pass then asks the server about type tokens
- * and suspicious member names, which catches what the syntax can't (instance members on
- * restricted types, aliases).
+ * a semantic pass then catches what the syntax can't (instance members on restricted types,
+ * aliases): from the C# server's semantic tokens when it's available, otherwise from what the
+ * built-in engine bound.
  */
 export function registerAllowlistLint(
   cache: DocumentCache,
@@ -26,6 +27,7 @@ export function registerAllowlistLint(
   /** Fires when the backend may have become available (workspace trust granted). */
   refreshAll: vscode.Event<void>,
   backend: () => Promise<ShadowBackend | undefined>,
+  engine: () => Promise<CSharpEngine | undefined>,
 ): vscode.Disposable {
   const collection = vscode.languages.createDiagnosticCollection('apim-allowlist');
   const timers = new Map<string, NodeJS.Timeout>();
@@ -79,7 +81,20 @@ export function registerAllowlistLint(
     publish(document, syntactic);
 
     const b = doc.expressions.length > 0 ? await backend() : undefined;
-    if (!b || !current()) return;
+    if (!b) {
+      const e = doc.expressions.length > 0 ? await engine() : undefined;
+      if (!e || !current() || document.version !== version) return;
+      const semantic: Finding[] = [];
+      for (const expr of doc.expressions) {
+        for (const f of lintReferences(e.references(expr.code, expr.kind), allow)) {
+          const range = expr.map.rangeToSource(f.range);
+          if (range) semantic.push({ range, message: f.message, code: f.kind === 'type' ? 'disallowed-type' : 'disallowed-member' });
+        }
+      }
+      publish(document, [...syntactic, ...semantic]);
+      return;
+    }
+    if (!current()) return;
     try {
       const synced = await b.sync(document);
       if (!synced || document.version !== version || synced.version !== version) return;

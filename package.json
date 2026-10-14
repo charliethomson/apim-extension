@@ -31,11 +31,11 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "In Restricted Mode, C# IntelliSense and type checking inside expressions are off, because they generate a .NET project and restore it from NuGet. Parsing, policy diagnostics and XML completion still work."
+      "description": "In Restricted Mode, the C# extension isn't used, because it would generate a .NET project and restore it from NuGet. Expressions get the built-in C# engine instead, and everything else works as usual."
     },
     "virtualWorkspaces": {
       "supported": "limited",
-      "description": "C# features inside expressions need the .NET SDK and a local file system."
+      "description": "The C# extension's features inside expressions need the .NET SDK and a local file system. The built-in C# engine works everywhere."
     }
   },
   "contributes": {
@@ -127,22 +127,24 @@
         "apimPolicy.csharp.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "C# IntelliSense and type checking inside policy expressions. Needs the C# extension (`ms-dotnettools.csharp`)."
+          "markdownDescription": "C# IntelliSense and type checking inside policy expressions, from the C# extension (`ms-dotnettools.csharp`) or the built-in engine (see `apimPolicy.csharp.mode`)."
         },
         "apimPolicy.csharp.mode": {
           "type": "string",
           "enum": [
             "auto",
             "file",
-            "virtual"
+            "virtual",
+            "builtin"
           ],
           "enumDescriptions": [
-            "`file` when the .NET 10 SDK is installed, otherwise `virtual`.",
-            "A hidden .NET 10 file-based app in extension storage: completion, hover and type errors.",
-            "An in-memory document: completion and hover only, no type errors."
+            "The C# extension when it's installed (`file` with the .NET 10 SDK, otherwise `virtual`), the built-in engine when it isn't.",
+            "The C# extension, with a hidden .NET 10 file-based app in extension storage: completion, hover and type errors.",
+            "The C# extension, with an in-memory document: completion and hover. Type errors come from the built-in engine.",
+            "The built-in engine only. Never starts the C# extension, works in Restricted Mode."
           ],
           "default": "auto",
-          "markdownDescription": "How expressions are given to the C# language server. Takes effect after a reload."
+          "markdownDescription": "Which C# implementation answers inside expressions. Takes effect after a reload."
         },
         "apimPolicy.allowedTypes.severity": {
           "type": "string",
@@ -171,6 +173,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:integration": "node esbuild.mjs && node esbuild.mjs --tests && node out/test/integration/runTest.js",
+    "test:integration:builtin": "node esbuild.mjs && node esbuild.mjs --tests && APIM_IT_NO_CSHARP=1 node out/test/integration/runTest.js",
     "package": "node esbuild.mjs --production && vsce package --no-update-package-json --no-dependencies \"$(scripts/ci/version.sh)\"",
     "spike": "node esbuild.mjs --spike && node out/spike/run.js"
   },

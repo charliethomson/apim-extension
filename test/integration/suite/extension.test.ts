@@ -195,4 +195,63 @@ describe('APIM policy extension', () => {
       assert.equal(diags.length, 0);
     });
   });
+
+  (withCSharp ? describe.skip : describe)('C# in expressions, built-in engine', () => {
+    const policy = `<policies>
+    <inbound>
+        <set-variable name="a" value="@(context.Request.Headers.GetValueOrDefault(&quot;X&quot;, &quot;&quot;))" />
+        <set-variable name="b" value="@(context.Request.Headers.Where(h =&gt; h.Key.Length &gt; 1).Count())" />
+        <set-variable name="c" value="@(context.Request.Nope)" />
+        <set-variable name="d" value="@(context.Request.)" />
+    </inbound>
+</policies>`;
+    let doc: vscode.TextDocument;
+
+    before(async () => {
+      doc = await open('raw/echo.policy.xml');
+      await setText(doc, policy);
+    });
+
+    it('completes members, with ranges in the policy', async () => {
+      const pos = at(doc, 'context.Request.)', 'context.Request.'.length);
+      const list = await complete(doc, pos, '.');
+      for (const n of ['Headers', 'Body', 'Url', 'Method']) assert.ok(labels(list).includes(n), `${n} in ${labels(list).join(', ')}`);
+      const item = list.items.find((i) => i.label === 'Headers')!;
+      assert.ok(item.range instanceof vscode.Range && item.range.start.isEqual(pos));
+    });
+
+    it('completes lambda parameters in the escaped format', async () => {
+      const names = labels(await complete(doc, at(doc, 'h.Key', 2), '.'));
+      assert.ok(names.includes('Key') && names.includes('Value'), names.join(', '));
+    });
+
+    it('shows signatures and docs on hover, with signature help', async () => {
+      const hovers = await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', doc.uri, at(doc, 'Headers.GetValueOrDefault', 2));
+      const text = hovers.flatMap((h) => h.contents).map((c) => (typeof c === 'string' ? c : 'value' in c ? c.value : '')).join('\n');
+      assert.match(text, /IReadOnlyDictionary<string, string\[\]> IRequest\.Headers/);
+      assert.match(text, /Request headers/);
+      const help = await vscode.commands.executeCommand<vscode.SignatureHelp>('vscode.executeSignatureHelpProvider', doc.uri, at(doc, 'GetValueOrDefault(', 'GetValueOrDefault('.length), '(');
+      assert.ok(help && help.signatures.length === 2, 'both GetValueOrDefault overloads');
+    });
+
+    it('goes to the stub definition', async () => {
+      const defs = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>('vscode.executeDefinitionProvider', doc.uri, at(doc, 'Request.Headers', 2));
+      const uris = defs.map((d) => ('targetUri' in d ? d.targetUri : d.uri).path);
+      assert.ok(uris.some((p) => p.endsWith('stubs/ApimContext.cs')), uris.join(', '));
+    });
+
+    it('reports errors on the policy and updates them after an edit', async () => {
+      const diags = await waitFor(() => vscode.languages.getDiagnostics(doc.uri).filter((d) => d.source === 'apim (C#)'), (d) => d.length >= 2, 10000);
+      assert.deepEqual(diags.map((d) => doc.getText(d.range)).sort(), ['.', 'Nope']);
+      await setText(doc, doc.getText().replace('context.Request.Nope', 'context.Request.Method').replace('context.Request.)', 'context.Request.Method)'));
+      const after = await waitFor(() => vscode.languages.getDiagnostics(doc.uri).filter((d) => d.source === 'apim (C#)'), (d) => d.length === 0, 10000);
+      assert.equal(after.length, 0);
+    });
+
+    it('flags disallowed members through what the engine bound', async () => {
+      await setText(doc, doc.getText().replace('value="@(context.Request.Method)"', 'value="@{ var d = DateTime.Now; return d.ToBinary(); }"'));
+      const diags = await waitFor(() => vscode.languages.getDiagnostics(doc.uri).filter((d) => String(d.code).startsWith('disallowed-')), (d) => d.length >= 1, 10000);
+      assert.deepEqual(diags.map((d) => `${d.code}:${doc.getText(d.range)}`), ['disallowed-member:ToBinary']);
+    });
+  });
 });

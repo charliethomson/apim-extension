@@ -2,6 +2,7 @@
 !dist/extension.js
 !syntaxes/**
 !stubs/**
+!data/csharp-model.json
 !language-configuration.json
 !package.json
 !README.md

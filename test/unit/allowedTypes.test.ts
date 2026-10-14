@@ -1,17 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Allowlist, lintAllowedTypes, type AllowlistData, type BclIndex } from '../../src/csharp/allowedTypes';
-import { parseStubs } from '../../src/csharp/stubModel';
+import { Allowlist, lintAllowedTypes, lintReferences, type AllowlistData, type BclIndex } from '../../src/csharp/allowedTypes';
+import { CSharpEngine } from '../../src/csharp/lang/service';
+import { readStubs } from '../../src/csharp/lang/stubs';
 import { parse } from '../../src/parser/scanner';
 
 const root = join(__dirname, '..', '..');
 const read = (p: string) => readFileSync(join(root, p), 'utf8');
-const stubs = parseStubs(read('stubs/ApimContext.cs'));
 const allow = new Allowlist(
   JSON.parse(read('data/allowed-types.json')) as AllowlistData,
   JSON.parse(read('data/bcl-types.json')) as BclIndex,
-  new Set([...stubs.keys(), 'PolicyExtensions', 'NamedValues']),
+  new Set(readStubs(read('stubs/ApimContext.cs'), { types: {} }).map((d) => d.name)),
 );
 
 const lint = (code: string) => lintAllowedTypes(code, allow).map((f) => code.slice(f.range.start, f.range.end));
@@ -126,4 +126,21 @@ describe('lintAllowedTypes on fixtures', () => {
 
 it('flags delegate types, which the allowlist leaves out', () => {
   expect(names('{ Func<string, int> f = s => s.Length; return f("a"); }')).toEqual(['System.Func']);
+});
+
+describe('lintReferences (built-in engine semantic pass)', () => {
+  const engine = CSharpEngine.load(JSON.parse(read('data/csharp-model.json')), read('stubs/ApimContext.cs'));
+  const lint = (code: string, kind: 'expr' | 'block' = 'expr') => lintReferences(engine.references(code, kind), allow).map((f) => `${code.slice(f.range.start, f.range.end)}: ${f.name}`);
+
+  it('flags restricted instance members whose receiver type is never written', () => {
+    // The syntactic pass can't see that `d` is a DateTime.
+    expect(lint('var d = context.Timestamp; return d.ToBinary();', 'block')).toEqual(['ToBinary: System.DateTime.ToBinary']);
+    expect(lintAllowedTypes('var d = context.Timestamp; return d.ToBinary();', allow)).toEqual([]);
+  });
+
+  it('flags forbidden types the model knows, and leaves allowed ones and the stubs alone', () => {
+    expect(lint('new XmlDocument().InnerXml')).toEqual(['XmlDocument: System.Xml.XmlDocument']);
+    expect(lint('context.Request.Headers.GetValueOrDefault("a", "").AsJwt()?.Subject')).toEqual([]);
+    expect(lint('JObject.Parse("{}")["a"].ToString() + DateTime.UtcNow.Year')).toEqual([]);
+  });
 });

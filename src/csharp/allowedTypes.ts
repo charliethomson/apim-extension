@@ -11,6 +11,7 @@
 
 import { KEYWORDS, lex, type Token } from '../parser/csharpLexer';
 import type { OffsetRange } from '../sourceMap';
+import type { Reference } from './lang/binder';
 
 export interface AllowlistData {
   /** Full type name (with `N arity for generics) → "*", allowed members, or { except }. */
@@ -235,7 +236,29 @@ export function lintAllowedTypes(code: string, allow: Allowlist): LintFinding[] 
   return findings.sort((a, b) => a.range.start - b.range.start);
 }
 
-function memberFinding(type: string, member: string, tok: Token, allowed: string[]): LintFinding {
+/**
+ * The semantic half of the lint, from what the built-in engine bound: every type written in the
+ * code, and every member used on a restricted type, whatever the receiver's spelling.
+ */
+export function lintReferences(refs: readonly Reference[], allow: Allowlist): LintFinding[] {
+  const out: LintFinding[] = [];
+  for (const r of refs) {
+    if (r.def.origin === 'stub') continue;
+    const type = r.def.key.replace(/`\d+/g, '').replace(/\+/g, '.');
+    if (!r.member) {
+      if (!allow.isTypeAllowed(type)) out.push({ range: r.span, kind: 'type', name: type, message: `'${type}' isn't on the APIM policy expression allowlist.` });
+      continue;
+    }
+    const member = r.member.kind === 'ctor' ? '(Constructor)' : r.member.kind === 'indexer' ? 'Item' : r.member.name;
+    const allowed = allow.memberProblem(type, member);
+    if (!allowed) continue;
+    if (member === '(Constructor)') out.push({ range: r.span, kind: 'member', name: `${type}..ctor`, message: `APIM doesn't allow constructing '${shortName(type)}'.` });
+    else out.push(memberFinding(type, member, r.span, allowed));
+  }
+  return out.sort((a, b) => a.range.start - b.range.start);
+}
+
+function memberFinding(type: string, member: string, tok: OffsetRange, allowed: string[]): LintFinding {
   const list = allowed.filter((m) => m !== '(Constructor)');
   const shown = list.length > 8 ? `${list.slice(0, 8).join(', ')}, …` : list.join(', ');
   return {

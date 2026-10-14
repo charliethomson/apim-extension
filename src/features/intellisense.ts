@@ -1,14 +1,14 @@
 /**
  * Completion, hover, signature help and go-to-definition for policy documents: the XML side from
  * the catalog, known variables and headers in dictionary lookups, and everything else inside
- * expressions forwarded to the C# extension through the shadow document. Without the C#
- * extension, `context.` member chains still complete from the stubs.
+ * expressions either forwarded to the C# extension through the shadow document or, without it
+ * (or in `builtin` mode), answered by the built-in C# engine.
  */
 
 import * as vscode from 'vscode';
 import type { ShadowBackend, SyncedShadow } from '../csharp/backend';
 import { classifyShadowLocation } from '../csharp/mapping';
-import { membersAfter, type StubModel } from '../csharp/stubModel';
+import type { CSharpEngine, EntryKind } from '../csharp/lang/service';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import type { Document, Expression } from '../parser/ast';
 import { xmlCompletions, type XmlItem, type XmlItemKind } from '../policy/completion';
@@ -20,8 +20,9 @@ export interface IntellisenseDeps {
   cache: DocumentCache;
   catalog: Catalog;
   index: PolicyIndex;
-  stubs: StubModel;
   stubsUri: vscode.Uri;
+  /** Resolves to the built-in engine, or undefined when C# features are off. */
+  engine: () => Promise<CSharpEngine | undefined>;
   /** Resolves to the C# backend, or undefined when C# features are unavailable. */
   backend: () => Promise<ShadowBackend | undefined>;
 }
@@ -34,6 +35,23 @@ const XML_KIND: Record<XmlItemKind, vscode.CompletionItemKind> = {
   snippet: vscode.CompletionItemKind.Snippet,
   namedValue: vscode.CompletionItemKind.Constant,
   fragment: vscode.CompletionItemKind.Reference,
+};
+
+const ENTRY_KIND: Record<EntryKind, vscode.CompletionItemKind> = {
+  method: vscode.CompletionItemKind.Method,
+  property: vscode.CompletionItemKind.Property,
+  field: vscode.CompletionItemKind.Field,
+  constant: vscode.CompletionItemKind.Constant,
+  enumMember: vscode.CompletionItemKind.EnumMember,
+  class: vscode.CompletionItemKind.Class,
+  interface: vscode.CompletionItemKind.Interface,
+  struct: vscode.CompletionItemKind.Struct,
+  enum: vscode.CompletionItemKind.Enum,
+  delegate: vscode.CompletionItemKind.Function,
+  namespace: vscode.CompletionItemKind.Module,
+  local: vscode.CompletionItemKind.Variable,
+  parameter: vscode.CompletionItemKind.Variable,
+  keyword: vscode.CompletionItemKind.Keyword,
 };
 
 export function registerIntellisense(deps: IntellisenseDeps): vscode.Disposable {
@@ -73,7 +91,8 @@ function completionProvider(deps: IntellisenseDeps): vscode.CompletionItemProvid
         const forwarded = await forwardCompletion(backend, document, doc, offset, context, token);
         if (forwarded) return forwarded;
       }
-      return stubCompletion(deps.stubs, document, expr, code);
+      const engine = await deps.engine();
+      return engine && engineCompletion(engine, document, expr, code, position);
     },
   };
 }
@@ -187,33 +206,19 @@ function mapCompletion(item: vscode.CompletionItem, synced: SyncedShadow, docume
   return out;
 }
 
-function stubCompletion(model: StubModel, document: vscode.TextDocument, expr: Expression, code: number): vscode.CompletionItem[] | undefined {
-  const before = expr.code.slice(0, code);
-  const hit = membersAfter(model, before);
-  if (!hit) {
-    // Not after a member access: offer `context` itself.
-    const word = /(^|[^\w.])(\w*)$/.exec(before);
-    if (word) {
-      const typed = word[2];
-      const start = expr.map.toSource(code - typed.length);
-      if (start === undefined) return undefined;
-      const item = new vscode.CompletionItem('context', vscode.CompletionItemKind.Variable);
-      item.detail = 'IProxyRequestContext';
-      item.documentation = new vscode.MarkdownString(model.get('IProxyRequestContext')?.doc ?? '');
-      item.range = toRange(document, { start, end: expr.map.toSource(code)! });
-      return [item];
-    }
-    return undefined;
-  }
-  const start = expr.map.toSource(code - hit.typed.length);
-  const end = expr.map.toSource(code);
-  if (start === undefined || end === undefined) return undefined;
-  return hit.type.members.map((m) => {
-    const kind = m.kind === 'method' ? vscode.CompletionItemKind.Method : m.kind === 'enumMember' ? vscode.CompletionItemKind.EnumMember : vscode.CompletionItemKind.Property;
-    const item = new vscode.CompletionItem(m.name, kind);
-    item.detail = m.kind === 'method' ? `${m.type} ${m.name}(${m.params ?? ''})` : `${m.type} ${m.name}`;
-    if (m.doc) item.documentation = new vscode.MarkdownString(m.doc);
-    item.range = toRange(document, { start, end });
+function engineCompletion(engine: CSharpEngine, document: vscode.TextDocument, expr: Expression, code: number, position: vscode.Position): vscode.CompletionItem[] | undefined {
+  const result = engine.complete(expr.code, expr.kind, code);
+  if (!result) return undefined;
+  const range = expr.map.rangeToSource(result.span);
+  if (!range) return undefined;
+  const r = onCursorLine(toRange(document, range), position);
+  return result.entries.map((e) => {
+    const item = new vscode.CompletionItem(e.label, ENTRY_KIND[e.kind]);
+    item.detail = e.detail;
+    if (e.documentation) item.documentation = new vscode.MarkdownString(e.documentation);
+    if (e.insertText) item.insertText = e.insertText;
+    item.sortText = e.sortText;
+    item.range = r;
     return item;
   });
 }
@@ -260,16 +265,13 @@ function hoverProvider(deps: IntellisenseDeps): vscode.HoverProvider {
         }
       }
 
-      // Fallback: hover on a context member chain from the stubs.
-      const word = /\w*$/.exec(expr.code.slice(0, code))![0] + /^\w*/.exec(expr.code.slice(code))![0];
-      const start = code - /\w*$/.exec(expr.code.slice(0, code))![0].length;
-      const hit = membersAfter(deps.stubs, expr.code.slice(0, start) + word);
-      const member = hit?.type.members.find((m) => m.name === word);
-      if (!member) return undefined;
-      const sig = member.kind === 'method' ? `${member.type} ${hit!.type.name}.${member.name}(${member.params ?? ''})` : `${member.type} ${hit!.type.name}.${member.name}`;
-      const md = new vscode.MarkdownString().appendCodeblock(sig, 'csharp');
-      if (member.doc) md.appendMarkdown(member.doc);
-      return new vscode.Hover(md);
+      const engine = await deps.engine();
+      const h = engine?.hover(expr.code, expr.kind, code);
+      if (!h) return undefined;
+      const md = new vscode.MarkdownString().appendCodeblock(h.signature, 'csharp');
+      if (h.documentation) md.appendMarkdown(h.documentation);
+      const range = expr.map.rangeToSource(h.span);
+      return new vscode.Hover(md, range ? toRange(document, range) : undefined);
     },
   };
 }
@@ -281,9 +283,15 @@ function signatureProvider(deps: IntellisenseDeps): vscode.SignatureHelpProvider
     async provideSignatureHelp(document, position, token, context) {
       const doc = deps.cache.get(document);
       const offset = document.offsetAt(position);
-      if (!expressionAt(doc, offset)) return undefined;
+      const expr = expressionAt(doc, offset);
+      if (!expr) return undefined;
       const backend = await deps.backend();
-      const synced = backend && (await syncCurrent(backend, document));
+      if (!backend) {
+        const code = expr.map.toGenerated(offset);
+        const engine = await deps.engine();
+        return engine && code !== undefined ? engineSignatures(engine, expr, code) : undefined;
+      }
+      const synced = await syncCurrent(backend, document);
       const gen = synced?.shadow.map.toGenerated(offset);
       if (!synced || gen === undefined || token.isCancellationRequested) return undefined;
       return vscode.commands.executeCommand<vscode.SignatureHelp>(
@@ -294,6 +302,20 @@ function signatureProvider(deps: IntellisenseDeps): vscode.SignatureHelpProvider
       );
     },
   };
+}
+
+function engineSignatures(engine: CSharpEngine, expr: Expression, code: number): vscode.SignatureHelp | undefined {
+  const r = engine.signatureHelp(expr.code, expr.kind, code);
+  if (!r) return undefined;
+  const help = new vscode.SignatureHelp();
+  help.signatures = r.signatures.map((s) => {
+    const info = new vscode.SignatureInformation(s.label, s.documentation ? new vscode.MarkdownString(s.documentation) : undefined);
+    info.parameters = s.parameters.map((p) => new vscode.ParameterInformation(p.label));
+    return info;
+  });
+  help.activeSignature = r.activeSignature;
+  help.activeParameter = r.activeParameter;
+  return help;
 }
 
 // ---- definition ---------------------------------------------------------------------------
@@ -324,7 +346,15 @@ function definitionProvider(deps: IntellisenseDeps): vscode.DefinitionProvider {
       }
 
       const backend = await deps.backend();
-      const synced = backend && (await syncCurrent(backend, document));
+      if (!backend) {
+        const engine = await deps.engine();
+        const def = engine?.definition(expr.code, expr.kind, code);
+        if (!def) return undefined;
+        if (def.kind === 'stub') return [new vscode.Location(deps.stubsUri, new vscode.Position(def.location.line, def.location.character))];
+        const range = expr.map.rangeToSource(def.span);
+        return range ? [new vscode.Location(document.uri, toRange(document, range))] : undefined;
+      }
+      const synced = await syncCurrent(backend, document);
       const gen = synced?.shadow.map.toGenerated(offset);
       if (!synced || gen === undefined || token.isCancellationRequested) return undefined;
       const results = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(

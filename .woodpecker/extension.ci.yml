@@ -1,5 +1,5 @@
 # The gate for the VS Code extension: typecheck, unit tests with the coverage floor, the stubs
-# compile check, packaging, the integration suite in VS Code with the C# extension, and the
+# compile check, packaging, the integration suite in VS Code with and without the C# extension, and the
 # dependency audit. There is no release pipeline: the registry has no kind for a .vsix yet,
 # and Marketplace publishing isn't set up (see README "Install").
 when:
@@ -68,6 +68,8 @@ steps:
       - Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp >/dev/null 2>&1 &
       - export DISPLAY=:99
       - npm run test:integration
+      # Again with the C# extension disabled, so the built-in engine answers.
+      - APIM_IT_NO_CSHARP=1 node out/test/integration/runTest.js
 
   advisories:
     image: node:22-bookworm
