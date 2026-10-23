@@ -3,24 +3,14 @@ import { ApimInstance, ArmClient, ArmError, type Backend, type NamedValue, parse
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import { log } from '../log';
 import { type Document, type Node, parse } from '@apim-policy/document';
-import { chainsFor, type IncludeSets, type OuterSet, outerVariables, type PolicySummary, summarize } from '@apim-policy/analysis';
+import { chainsFor, type IncludeSets, type OuterSet, outerVariables, summarize } from '@apim-policy/analysis';
 import { instancePath, scopeFromInstancePath, scopeFromPath, scopeLabel, type Scope } from '@apim-policy/core';
-
-/** Read-only documents for what lives on the instance, at the paths `instancePath` gives. */
-export const INSTANCE_SCHEME = 'apim-instance';
+import { EDIT_SCHEME, INSTANCE_SCHEME, type InstanceSource, type RemoteFragment } from '@apim-policy/workspace';
 
 const SCOPES_KEY = 'apimPolicy.scopes';
 
 /** Thrown by the token provider when there's no Microsoft session and asking would prompt. */
 class NotSignedIn extends Error {}
-
-export interface RemoteFragment {
-  id: string;
-  uri: vscode.Uri;
-  summary: PolicySummary;
-  doc: Document;
-  description?: string;
-}
 
 /**
  * The connection to one APIM instance (`apimPolicy.instance`), for what the workspace can't tell
@@ -30,7 +20,7 @@ export interface RemoteFragment {
  * Every read fails soft: a feature asking for instance data gets nothing back while signed out or
  * offline, and the status item says why.
  */
-export class InstanceConnection implements vscode.Disposable {
+export class InstanceConnection implements vscode.Disposable, InstanceSource<vscode.Uri> {
   private instance?: ApimInstance;
   private client?: ArmClient;
   /** Bumped whenever what the instance says may have changed, to invalidate derived caches. */
@@ -44,7 +34,7 @@ export class InstanceConnection implements vscode.Disposable {
   private readonly status = vscode.languages.createLanguageStatusItem('apimPolicy.instance', LANGUAGE_ID);
   private readonly scopeStatus = vscode.languages.createLanguageStatusItem('apimPolicy.scope', LANGUAGE_ID);
   private readonly parsed = new Map<string, Document>();
-  private readonly outerCache = new Map<string, { version: number; generation: number; value: Promise<OuterSet[]> }>();
+  private readonly outerCache = new Map<string, { doc: Document; generation: number; value: Promise<OuterSet[]> }>();
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -118,10 +108,10 @@ export class InstanceConnection implements vscode.Disposable {
     return this.guard(p, fallback);
   }
 
-  private summarized?: { source: Promise<unknown>; value: Promise<RemoteFragment[]> };
+  private summarized?: { source: Promise<unknown>; value: Promise<RemoteFragment<vscode.Uri>[]> };
 
   /** The instance's fragments, summarised once per read of the list. */
-  fragments(): Promise<RemoteFragment[]> {
+  fragments(): Promise<RemoteFragment<vscode.Uri>[]> {
     const i = this.instance;
     if (!i) return Promise.resolve([]);
     const source = i.fragments();
@@ -145,19 +135,20 @@ export class InstanceConnection implements vscode.Disposable {
 
   /** The scope a document's policy applies at: set by hand, or from its APIOps-shaped path. */
   scopeOf(uri: vscode.Uri): Scope | undefined {
-    if (uri.scheme === INSTANCE_SCHEME || uri.scheme === 'apim-edit') return scopeFromInstancePath(uri.path);
+    if (uri.scheme === INSTANCE_SCHEME || uri.scheme === EDIT_SCHEME) return scopeFromInstancePath(uri.path);
     const set = this.context.workspaceState.get<Record<string, Scope>>(SCOPES_KEY, {})[vscode.workspace.asRelativePath(uri)];
     return set ?? scopeFromPath(uri.path, this.isExtractRoot);
   }
 
   /** What the broader scopes set before each point of `document` (see scopes.ts in @apim-policy/analysis). */
-  outerVariables(document: vscode.TextDocument, doc: Document, includeSets: IncludeSets): Promise<OuterSet[]> {
+  outerVariables(uri: vscode.Uri, doc: Document, includeSets: IncludeSets): Promise<OuterSet[]> {
     const i = this.instance;
-    const scope = this.scopeOf(document.uri);
+    const scope = this.scopeOf(uri);
     if (!i || !scope) return Promise.resolve([]);
-    const key = document.uri.toString();
+    const key = uri.toString();
     const hit = this.outerCache.get(key);
-    if (hit && hit.version === document.version && hit.generation === this.generation) return hit.value;
+    // The document cache makes one parse per version, so the same parse means the same text.
+    if (hit && hit.doc === doc && hit.generation === this.generation) return hit.value;
     const value = this.guard(
       (async () => {
         const products = scope.kind === 'api' || scope.kind === 'operation' ? (await i.productsOf(scope.api)).map((p) => p.id) : [];
@@ -168,7 +159,7 @@ export class InstanceConnection implements vscode.Disposable {
       })(),
       [],
     );
-    this.outerCache.set(key, { version: document.version, generation: this.generation, value });
+    this.outerCache.set(key, { doc, generation: this.generation, value });
     return value;
   }
 

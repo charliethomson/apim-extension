@@ -16,8 +16,8 @@ import { registerInstanceFileSystem } from './instance/files';
 import { pushCommand, PushSupport } from './instance/push';
 import { registerIntellisense } from './editing/intellisense';
 import { registerLanguageDetection } from './editing/languageDetection';
-import { PolicyIndex } from './workspace/policyIndex';
-import { ShapeService } from './workspace/shapes';
+import { ShapeService } from '@apim-policy/workspace';
+import { workspaceIndex } from './workspace/host';
 import { log } from './log';
 import { catalog } from '@apim-policy/catalog';
 import allowedTypes from '@apim-policy/csharp-engine/assets/allowed-types.json';
@@ -78,7 +78,7 @@ async function start(context: vscode.ExtensionContext): Promise<Started> {
   const version = (context.extension.packageJSON as { version: string }).version;
   log().info(`apim-policy ${version} (${__APIM_BUILD__.commit}${__APIM_BUILD__.dirty ? ', dirty' : ''})`);
   const cache = new DocumentCache();
-  const index = new PolicyIndex(cache);
+  const { index, disposable: indexing } = workspaceIndex(cache);
   const connection = new InstanceConnection(context, (dir) => index.isExtractRoot(dir));
   index.attach(connection);
   const pushSupport = new PushSupport(connection);
@@ -112,7 +112,7 @@ async function start(context: vscode.ExtensionContext): Promise<Started> {
   Object.assign(connection.commands, docCommands(cache, index, shapes, connection));
   context.subscriptions.push(
     cache,
-    index,
+    indexing,
     connection,
     pushSupport,
     registerUnknownNamedValues(cache, connection),

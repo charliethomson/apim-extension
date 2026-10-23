@@ -1,13 +1,8 @@
 import * as vscode from 'vscode';
 import { scopeFromInstancePath, scopeLabel, type Scope } from '@apim-policy/core';
-import { INSTANCE_SCHEME, type InstanceConnection } from './connection';
+import { EDIT_SCHEME, INSTANCE_SCHEME } from '@apim-policy/workspace';
+import type { InstanceConnection } from './connection';
 import type { PushSupport } from './push';
-
-/**
- * The editable copy of an instance document. Saving keeps a draft in memory; only **Push to
- * Instance** (a diff against a fresh pull, then an explicit confirmation) changes the instance.
- */
-export const EDIT_SCHEME = 'apim-edit';
 
 interface Opened {
   text: string;

@@ -3,9 +3,8 @@ import * as vscode from 'vscode';
 import { LANGUAGE_ID, type DocumentCache } from '../documents';
 import { fragmentIdsFor, scopeFromInstancePath, scopeLabel } from '@apim-policy/core';
 import { type DocContext, fragmentMarkdown, GENERATED_MARKER, policyMarkdown, summarize } from '@apim-policy/analysis';
+import type { PolicyIndex, ShapeService } from '@apim-policy/workspace';
 import type { InstanceConnection } from '../instance/connection';
-import type { PolicyIndex } from '../workspace/policyIndex';
-import type { ShapeService } from '../workspace/shapes';
 
 /**
  * Markdown docs for policies and fragments (`fragmentMarkdown` and `policyMarkdown` in @apim-policy/analysis):
@@ -14,7 +13,7 @@ import type { ShapeService } from '../workspace/shapes';
  * - **APIM: Write Fragment Docs** writes one beside each fragment in the workspace (`README.md` in
  *   an APIOps fragment folder, else `<name>.md`), replacing only files it wrote before.
  */
-export function docCommands(cache: DocumentCache, index: PolicyIndex, shapes: ShapeService, connection: InstanceConnection): Record<string, (...args: unknown[]) => unknown> {
+export function docCommands(cache: DocumentCache, index: PolicyIndex<vscode.Uri>, shapes: ShapeService<vscode.Uri>, connection: InstanceConnection): Record<string, (...args: unknown[]) => unknown> {
   const preview = async (arg?: unknown) => {
     const document = arg instanceof vscode.Uri ? await vscode.workspace.openTextDocument(arg) : vscode.window.activeTextEditor?.document;
     if (!document || document.languageId !== LANGUAGE_ID) {
@@ -100,7 +99,7 @@ function docUri(uri: vscode.Uri): vscode.Uri {
 }
 
 /** Links to the workspace's fragment files by id, for a preview. */
-async function hrefsTo(index: PolicyIndex, href: (uri: vscode.Uri) => string): Promise<(id: string) => string | undefined> {
+async function hrefsTo(index: PolicyIndex<vscode.Uri>, href: (uri: vscode.Uri) => string): Promise<(id: string) => string | undefined> {
   const byId = new Map<string, vscode.Uri>();
   for (const f of await index.localFragments()) for (const id of f.ids) if (!byId.has(id)) byId.set(id, f.uri);
   return (id) => {

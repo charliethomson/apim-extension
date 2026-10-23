@@ -47,7 +47,7 @@ versioning and ignore the Rust-specific parts.
 - **Identifier:** the VS Code extension id is `thmsn-dev.apim-policy` (marketplace form
   `publisher.name`). `dev.thmsn.apim-policy` is used anywhere a reverse-domain id fits.
 - **Testing:** unit tests run on vitest, per package. Every package under `packages/` has the 80%
-  coverage floor (`vitest.shared.ts`), met by its own tests, so a contract is tested in the
+  coverage floor (`vitest.shared.mts`), met by its own tests, so a contract is tested in the
   package that owns it. The VS Code glue in `extension/src/` is wiring, and it's covered by
   `@vscode/test-electron` integration tests instead.
 - **CI is kiln.** The pipelines are Rust in [`.kiln/`](.kiln/src/main.rs) (kiln, plus libci's

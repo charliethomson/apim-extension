@@ -1,0 +1,26 @@
+{
+  "name": "@apim-policy/workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The workspace layer: the index of every policy file (and the connected instance) and the JSON shapes across them, behind a host interface.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@apim-policy/analysis": "*",
+    "@apim-policy/azure": "*",
+    "@apim-policy/catalog": "*",
+    "@apim-policy/core": "*",
+    "@apim-policy/csharp-engine": "*",
+    "@apim-policy/document": "*"
+  },
+  "devDependencies": {
+    "@apim-policy/fixtures": "*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  }
+}

@@ -113,7 +113,7 @@ policy.xml ──► tolerant parser ──► elements, attributes, expressions
            ┌──────────────────────────┼──────────────────────────┐
            ▼                          ▼                          ▼
    policy catalog              C# engine                  workspace index
-   (@apim-policy/catalog)      (@apim-policy/csharp-engine) (fragments, variables,
+   (packages/catalog)          (packages/csharp-engine)   (fragments, variables,
    → diagnostics, XML          → completion, hover,        named values; with an
      completion, hover           signatures, errors       instance, its too)
                                                           → navigation, known names
@@ -213,6 +213,7 @@ own; `extension/` wires them to the editor. Dependencies point one way, top to b
 | [`packages/catalog`](packages/catalog) | what APIM accepts: `data/policies.json`, structural validation, XML completion | core, document |
 | [`packages/analysis`](packages/analysis) | what a policy does: variables, fragment headers, variable safety, scope chains, JSON shapes, formatting, docs | core, csharp-lexer, csharp-engine, document, catalog |
 | [`packages/azure`](packages/azure) | the Resource Manager client, the instance reader, the push format | core, document |
+| [`packages/workspace`](packages/workspace) | the index of every policy file (plus the connected instance's fragments, named values and outer scopes) and the JSON shapes across them, behind a host interface the extension implements | core, document, catalog, analysis, csharp-engine, azure |
 | [`packages/fixtures`](packages/fixtures) | sample policies the suites share (test-only) | nothing |
 | [`extension/`](extension) | the `.vsix`: manifest, providers, grammars, snippets, the integration suite | everything |
 | [`bench/`](bench) | hot-path benchmarks | the packages it times |
@@ -269,7 +270,7 @@ dotnet build packages/csharp-engine/stubs-check
  `audit.ci` runs `npm audit` on lockfile changes and weekly, and only fails
 on a critical advisory that [`audit-exceptions.json`](audit-exceptions.json) has no live
 exception for. Exceptions need a reason and an expiry date, and an expired one fails it. Every
-package under `packages/` has its own 80% coverage floor (`vitest.shared.ts`), met by its own
+package under `packages/` has its own 80% coverage floor (`vitest.shared.mts`), met by its own
 tests. The VS Code glue in `extension/src/` is covered by the integration suite instead, which
 runs with every other extension disabled.
 

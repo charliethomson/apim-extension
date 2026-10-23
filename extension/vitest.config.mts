@@ -1,4 +1,4 @@
-import { packageConfig } from '../vitest.shared';
+import { packageConfig } from '../vitest.shared.mts';
 
 // The providers are covered by the integration suite in VS Code (test/integration); these unit
 // tests check the grammars and snippets only.

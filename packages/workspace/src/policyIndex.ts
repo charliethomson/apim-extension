@@ -1,15 +1,12 @@
-import { open } from 'node:fs/promises';
-import * as vscode from 'vscode';
-import { LANGUAGE_ID, type DocumentCache } from '../documents';
-import { type Document, looksLikePolicy, parse, PROLOG_LIMIT, scanRoot } from '@apim-policy/document';
 import { fragmentIdsFor, scopeFromInstancePath, scopeLabel } from '@apim-policy/core';
+import { type Document, parse } from '@apim-policy/document';
 import type { Suggestion } from '@apim-policy/catalog';
 import { type KnownVariable, knownVariables, type OuterSet, type PolicySummary, type RelatedFile, summarize } from '@apim-policy/analysis';
 import type { NamedValue } from '@apim-policy/azure';
-import type { InstanceConnection, RemoteFragment } from '../instance/connection';
+import { type Disposable, EDIT_SCHEME, type InstanceSource, type RemoteFragment, type WorkspaceHost } from './host';
 
-interface Entry {
-  uri: vscode.Uri;
+interface Entry<U> {
+  uri: U;
   fragmentIds: string[];
   summary: PolicySummary;
   /** A fragment's parse, for what needs more than the summary (JSON shapes). Other files keep only the summary. */
@@ -21,32 +18,25 @@ interface Entry {
  * named values. Open documents are indexed from their live text. With an instance connected, its
  * fragments, named values and backends join in (a workspace file wins over the instance's copy),
  * and so do the variables its broader scopes set.
+ *
+ * The host reports file and document events (`fileCreated`, `documentChanged`, …); the index
+ * decides what they mean.
  */
-export class PolicyIndex implements vscode.Disposable {
-  private readonly entries = new Map<string, Entry>();
+export class PolicyIndex<U> implements Disposable {
+  private readonly entries = new Map<string, Entry<U>>();
   private readonly apiOpsNamedValues = new Set<string>();
-  private readonly disposables: vscode.Disposable[] = [];
+  private readonly listeners = new Set<() => void>();
+  private readonly disposables: Disposable[] = [];
   private scanned?: Promise<void>;
-  private readonly changed = new vscode.EventEmitter<void>();
-  /** Fires when any indexed file's summary changes (debounced). */
-  readonly onDidChange = this.changed.event;
-  private changeTimer?: NodeJS.Timeout;
-  private remote?: InstanceConnection;
+  private changeTimer?: ReturnType<typeof setTimeout>;
+  private remote?: InstanceSource<U>;
 
-  constructor(private readonly cache: DocumentCache) {
-    const watcher = vscode.workspace.createFileSystemWatcher('**/*.xml');
-    this.disposables.push(
-      watcher,
-      watcher.onDidCreate((u) => this.scanned && !ignored(u) && void this.updateFromDisk(u)),
-      watcher.onDidChange((u) => {
-        if (!this.scanned || ignored(u) || vscode.workspace.textDocuments.some((d) => d.uri.toString() === u.toString())) return;
-        void this.updateFromDisk(u);
-      }),
-      watcher.onDidDelete((u) => this.delete(u.toString())),
-      vscode.workspace.onDidChangeTextDocument((e) => this.updateFromDocument(e.document)),
-      vscode.workspace.onDidOpenTextDocument((d) => this.updateFromDocument(d)),
-      vscode.workspace.onDidCloseTextDocument((d) => d.uri.scheme === 'apim-edit' && this.delete(d.uri.toString())),
-    );
+  constructor(private readonly host: WorkspaceHost<U>) {}
+
+  /** Calls `listener` when any indexed file's summary changes (debounced). */
+  onDidChange(listener: () => void): Disposable {
+    this.listeners.add(listener);
+    return { dispose: () => this.listeners.delete(listener) };
   }
 
   /**
@@ -58,25 +48,59 @@ export class PolicyIndex implements vscode.Disposable {
   }
 
   /** Adds an instance's fragments, named values and outer scopes to what the index answers. */
-  attach(remote: InstanceConnection): void {
+  attach(remote: InstanceSource<U>): void {
     this.remote = remote;
     this.disposables.push(remote.onDidChange(() => this.notify()));
   }
 
-  private async remoteFragments(): Promise<RemoteFragment[]> {
+  // ---- events from the host ---------------------------------------------------------------------
+
+  fileCreated(uri: U): void {
+    if (this.scanned && !this.ignored(uri)) void this.updateFromDisk(uri);
+  }
+
+  /** An open document's file changing on disk is the editor's business; its text comes from there. */
+  fileChanged(uri: U): void {
+    if (!this.scanned || this.ignored(uri) || this.host.isOpen(uri)) return;
+    void this.updateFromDisk(uri);
+  }
+
+  fileDeleted(uri: U): void {
+    this.delete(this.host.key(uri));
+  }
+
+  /**
+   * A policy's live text, opened or edited. An open editable copy of an instance fragment
+   * (`apim-edit:`) is indexed too, so it stands in for the instance's version while you work on
+   * it: its callers see the edits before they're pushed. Other schemes aren't indexed.
+   */
+  documentChanged(uri: U, doc: Document): void {
+    const scheme = this.host.scheme(uri);
+    if (scheme !== 'file' && scheme !== EDIT_SCHEME) return;
+    this.set(this.host.key(uri), this.entryFor(uri, doc));
+  }
+
+  /** Closing an editable copy goes back to the instance's version. */
+  documentClosed(uri: U): void {
+    if (this.host.scheme(uri) === EDIT_SCHEME) this.delete(this.host.key(uri));
+  }
+
+  // ---- queries ----------------------------------------------------------------------------------
+
+  private async remoteFragments(): Promise<RemoteFragment<U>[]> {
     return this.remote ? this.remote.fragments() : [];
   }
 
   /** The workspace files that include any of `fragmentIds`. */
-  async callers(fragmentIds: readonly string[]): Promise<{ uri: vscode.Uri; summary: PolicySummary }[]> {
+  async callers(fragmentIds: readonly string[]): Promise<{ uri: U; summary: PolicySummary }[]> {
     await this.ready;
-    return [...this.entries.values()].filter((e) => e.uri.scheme === 'file' && e.summary.includes.some((id) => fragmentIds.includes(id))).map((e) => ({ uri: e.uri, summary: e.summary }));
+    return [...this.entries.values()].filter((e) => this.isFile(e.uri) && e.summary.includes.some((id) => fragmentIds.includes(id))).map((e) => ({ uri: e.uri, summary: e.summary }));
   }
 
   /** The fragments in workspace files, with their parses. */
-  async localFragments(): Promise<{ uri: vscode.Uri; ids: string[]; doc: Document }[]> {
+  async localFragments(): Promise<{ uri: U; ids: string[]; doc: Document }[]> {
     await this.ready;
-    return [...this.entries.values()].flatMap((e) => (e.uri.scheme === 'file' && e.fragmentIds.length && e.doc ? [{ uri: e.uri, ids: e.fragmentIds, doc: e.doc }] : []));
+    return [...this.entries.values()].flatMap((e) => (this.isFile(e.uri) && e.fragmentIds.length && e.doc ? [{ uri: e.uri, ids: e.fragmentIds, doc: e.doc }] : []));
   }
 
   /**
@@ -85,22 +109,22 @@ export class PolicyIndex implements vscode.Disposable {
    * when there is one), else the workspace's, so an instance policy leads to the instance fragment
    * it includes.
    */
-  async fragmentFiles(id: string, from?: vscode.Uri): Promise<vscode.Uri[]> {
+  async fragmentFiles(id: string, from?: U): Promise<U[]> {
     return (await this.candidates(id, from)).map((c) => c.uri);
   }
 
   /** Fragment `id` with its summary and parse, chosen as `fragmentFiles` orders them. */
-  async fragment(id: string, from?: vscode.Uri): Promise<{ uri: vscode.Uri; summary: PolicySummary; doc?: Document } | undefined> {
+  async fragment(id: string, from?: U): Promise<{ uri: U; summary: PolicySummary; doc?: Document } | undefined> {
     return (await this.candidates(id, from))[0];
   }
 
-  private async candidates(id: string, from?: vscode.Uri): Promise<{ uri: vscode.Uri; summary: PolicySummary; doc?: Document }[]> {
+  private async candidates(id: string, from?: U): Promise<{ uri: U; summary: PolicySummary; doc?: Document }[]> {
     await this.ready;
     const entries = [...this.entries.values()].filter((e) => e.fragmentIds.includes(id));
-    const files = entries.filter((e) => e.uri.scheme === 'file');
-    const edits = entries.filter((e) => e.uri.scheme !== 'file');
+    const files = entries.filter((e) => this.isFile(e.uri));
+    const edits = entries.filter((e) => !this.isFile(e.uri));
     const remote = async () => (await this.remoteFragments()).filter((f) => f.id === id);
-    if (from && isInstanceUri(from)) {
+    if (from && this.host.scheme(from).startsWith('apim-')) {
       // An open editable copy stands in for the instance's version of the same fragment.
       const instance = edits.length ? edits : await remote();
       return instance.length ? instance : files;
@@ -142,8 +166,8 @@ export class PolicyIndex implements vscode.Disposable {
     return (await this.remote.backends()).map((b) => ({ name: b.id, detail: b.url, documentation: b.description }));
   }
 
-  /** What the broader scopes set, placed in `document`; nothing without an instance and a scope. */
-  async outerVariables(document: vscode.TextDocument): Promise<OuterSet[]> {
+  /** What the broader scopes set, placed in `doc` (the policy at `uri`); nothing without an instance and a scope. */
+  async outerVariables(uri: U, doc: Document): Promise<OuterSet[]> {
     if (!this.remote) return [];
     await this.ready;
     // What includes in the outer policies set: the workspace's copy of a fragment, else the instance's.
@@ -154,40 +178,41 @@ export class PolicyIndex implements vscode.Disposable {
       const s = summaries.get(id);
       return s && (s.header ? s.header.outputs.map((v) => v.name) : s.variables.map((v) => v.name));
     };
-    return this.remote.outerVariables(document, this.cache.get(document), includeSets);
+    return this.remote.outerVariables(uri, doc, includeSets);
   }
 
   /** Whether `dir` holds an APIOps extract: apis/ or policyFragments/ under it. */
   isExtractRoot(dir: string): boolean {
-    const prefix = vscode.Uri.file(dir).toString();
+    const prefix = this.host.key(this.host.file(dir));
     for (const key of this.entries.keys()) if (key.startsWith(`${prefix}/apis/`) || key.startsWith(`${prefix}/policyFragments/`)) return true;
     return false;
   }
 
-  /** Variables visible in `document`, including through fragments and their callers. */
-  async variables(document: vscode.TextDocument): Promise<(KnownVariable & { uri: vscode.Uri })[]> {
+  /** Variables visible in `doc` (the policy at `uri`), including through fragments and their callers. */
+  async variables(uri: U, doc: Document): Promise<(KnownVariable & { uri: U })[]> {
     await this.ready;
-    const self = this.entryFor(document);
+    const self = this.entryFor(uri, doc);
+    const selfKey = this.host.key(uri);
     const others: RelatedFile[] = [];
-    for (const e of this.entries.values()) {
-      if (e.uri.toString() === document.uri.toString()) continue;
-      others.push({ key: e.uri.toString(), label: vscode.workspace.asRelativePath(e.uri), fragmentIds: e.fragmentIds, summary: e.summary });
+    for (const [key, e] of this.entries) {
+      if (key === selfKey) continue;
+      others.push({ key, label: this.host.label(e.uri), fragmentIds: e.fragmentIds, summary: e.summary });
     }
     // Fragments only the instance has; a workspace copy of the same id wins. Completion asks for
     // these too, so the instance gets 300 ms.
     const localIds = new Set(others.flatMap((o) => o.fragmentIds));
     for (const f of await within(this.remoteFragments(), [], 300)) {
-      if (!localIds.has(f.id)) others.push({ key: f.uri.toString(), label: `fragment ${f.id} (instance)`, fragmentIds: [f.id], summary: f.summary });
+      if (!localIds.has(f.id)) others.push({ key: this.host.key(f.uri), label: `fragment ${f.id} (instance)`, fragmentIds: [f.id], summary: f.summary });
     }
     const known = knownVariables(self.summary, self.fragmentIds, others).map((v) => ({
       ...v,
-      uri: v.originKey ? vscode.Uri.parse(v.originKey) : document.uri,
+      uri: v.originKey ? this.host.parse(v.originKey) : uri,
     }));
     const names = new Set(known.map((v) => v.name));
     const remote = this.remote;
     if (!remote) return known;
     // Completion asks for these, so the instance gets 300 ms; the read carries on for next time.
-    for (const o of await within(this.outerVariables(document), [], 300)) {
+    for (const o of await within(this.outerVariables(uri, doc), [], 300)) {
       if (names.has(o.name)) continue;
       names.add(o.name);
       known.push({ name: o.name, range: { start: 0, end: 0 }, element: 'set-variable', origin: `set by ${scopeLabel(o.scope)}`, uri: remote.policyUri(o.scope) });
@@ -195,60 +220,57 @@ export class PolicyIndex implements vscode.Disposable {
     return known;
   }
 
-  private entryFor(document: vscode.TextDocument): Entry {
-    const doc = this.cache.get(document);
+  // ---- upkeep -----------------------------------------------------------------------------------
+
+  private entryFor(uri: U, doc: Document): Entry<U> {
     const summary = summarize(doc);
     // An editable copy from the instance is that fragment, by the id in its path.
-    const instance = document.uri.scheme === 'apim-edit' ? scopeFromInstancePath(document.uri.path) : undefined;
-    const ids = summary.root !== 'fragment' ? [] : instance ? (instance.kind === 'fragment' ? [instance.fragment] : []) : fragmentIdsFor(document.uri.path);
-    return { uri: document.uri, fragmentIds: ids, summary, doc };
+    const path = this.host.path(uri);
+    const instance = this.host.scheme(uri) === EDIT_SCHEME ? scopeFromInstancePath(path) : undefined;
+    const ids = summary.root !== 'fragment' ? [] : instance ? (instance.kind === 'fragment' ? [instance.fragment] : []) : fragmentIdsFor(path);
+    return { uri, fragmentIds: ids, summary, doc };
   }
 
-  /**
-   * Files from their live text. An open editable copy of an instance fragment (`apim-edit:`) is
-   * indexed too, so it stands in for the instance's version while you work on it: its callers see
-   * the edits before they're pushed. Closing it goes back to the instance's version.
-   */
-  private updateFromDocument(document: vscode.TextDocument): void {
-    if (document.languageId !== LANGUAGE_ID || (document.uri.scheme !== 'file' && document.uri.scheme !== 'apim-edit')) return;
-    this.set(document.uri.toString(), this.entryFor(document));
+  private isFile(uri: U): boolean {
+    return this.host.scheme(uri) === 'file';
+  }
+
+  private ignored(uri: U): boolean {
+    return IGNORED.test(this.host.path(uri));
   }
 
   private async scan(): Promise<void> {
-    const [files, nvs] = await Promise.all([
-      vscode.workspace.findFiles('**/*.xml', '**/{node_modules,.git,bin,obj}/**', 10000),
-      vscode.workspace.findFiles('**/namedValues/*/namedValueInformation.json', '**/node_modules/**', 5000),
-    ]);
+    const [files, nvs] = await Promise.all([this.host.findPolicyFiles(), this.host.findNamedValueFiles()]);
     for (const u of nvs) {
-      const parts = u.path.split('/');
+      const parts = this.host.path(u).split('/');
       this.apiOpsNamedValues.add(parts[parts.length - 2]);
     }
-    const queue = files.filter((u) => !ignored(u));
+    const queue = files.filter((u) => !this.ignored(u));
     const worker = async () => {
       for (let u = queue.pop(); u; u = queue.pop()) await this.updateFromDisk(u);
     };
     await Promise.all(Array.from({ length: 16 }, worker));
-    vscode.workspace.textDocuments.forEach((d) => this.updateFromDocument(d));
+    for (const { uri, doc } of this.host.openPolicies()) this.documentChanged(uri, doc);
   }
 
-  private async updateFromDisk(uri: vscode.Uri): Promise<void> {
+  private async updateFromDisk(uri: U): Promise<void> {
     let text: string | undefined;
     try {
-      text = await readPolicy(uri);
+      text = await this.host.readPolicy(uri);
     } catch {
       return;
     }
     if (text === undefined) {
-      this.delete(uri.toString());
+      this.delete(this.host.key(uri));
       return;
     }
     const doc = parse(text);
     const summary = summarize(doc);
     const fragment = summary.root === 'fragment';
-    this.set(uri.toString(), { uri, fragmentIds: fragment ? fragmentIdsFor(uri.path) : [], summary, doc: fragment ? doc : undefined });
+    this.set(this.host.key(uri), { uri, fragmentIds: fragment ? fragmentIdsFor(this.host.path(uri)) : [], summary, doc: fragment ? doc : undefined });
   }
 
-  private set(key: string, entry: Entry): void {
+  private set(key: string, entry: Entry<U>): void {
     this.entries.set(key, entry);
     this.notify();
   }
@@ -260,22 +282,25 @@ export class PolicyIndex implements vscode.Disposable {
   /** One event per burst: a workspace scan or a typing run updates many entries. */
   private notify(): void {
     clearTimeout(this.changeTimer);
-    this.changeTimer = setTimeout(() => this.changed.fire(), 300);
+    this.changeTimer = setTimeout(() => this.listeners.forEach((l) => l()), 300);
   }
 
   dispose(): void {
     clearTimeout(this.changeTimer);
-    this.changed.dispose();
+    this.listeners.clear();
     for (const d of this.disposables) d.dispose();
   }
 }
+
+/** Folders whose XML is never a policy anyone edits. */
+const IGNORED = /\/(node_modules|\.git|bin|obj)\//;
 
 /**
  * `p`, or `fallback` when it takes longer than `ms`; `p` carries on either way. Completion uses it
  * so the instance's first read over the network doesn't hold it up.
  */
 export function within<T>(p: Promise<T>, fallback: T, ms: number): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([p, new Promise<T>((resolve) => (timer = setTimeout(() => resolve(fallback), ms)))]).finally(() => clearTimeout(timer));
 }
 
@@ -287,55 +312,4 @@ function namedValueDocs(nv: NamedValue): string {
   if (nv.keyVault) return `Named value \`${nv.displayName}\` (${nv.id}), a Key Vault reference: ${nv.keyVault}`;
   if (nv.secret) return `Named value \`${nv.displayName}\` (${nv.id}), secret. Its value isn't read.`;
   return `Named value \`${nv.displayName}\` (${nv.id}): ${nv.value ?? ''}`;
-}
-
-/** APIM caps a fragment at 512 KB; a file far bigger than that isn't a policy. */
-const MAX_POLICY_BYTES = 2 * 1024 * 1024;
-
-function ignored(uri: vscode.Uri): boolean {
-  return /\/(node_modules|\.git|bin|obj)\//.test(uri.path);
-}
-
-/** How much of a file decides whether it's a policy. */
-const HEAD_BYTES = 4096;
-
-/**
- * A policy file's text, or undefined when the file isn't a policy (judged from its first 4 KB)
- * or is too big to be one. On local disk the file is opened once, and only a policy is read past
- * its head: with on-access scanning every open costs a scan, and most XML isn't a policy.
- */
-async function readPolicy(uri: vscode.Uri): Promise<string | undefined> {
-  if (uri.scheme === 'file') {
-    const handle = await open(uri.fsPath, 'r');
-    try {
-      const { size } = await handle.stat();
-      if (size > MAX_POLICY_BYTES) return undefined;
-      const buf = Buffer.alloc(size);
-      let read = (await handle.read(buf, 0, Math.min(HEAD_BYTES, size), 0)).bytesRead;
-      // A long leading comment (a fragment header) can fill the head: read on until the root shows.
-      while (read < size && read < PROLOG_LIMIT && scanRoot(new TextDecoder().decode(buf.subarray(0, read))).more) {
-        const { bytesRead } = await handle.read(buf, read, Math.min(HEAD_BYTES, size - read), read);
-        if (bytesRead === 0) break;
-        read += bytesRead;
-      }
-      if (!looksLikePolicy(new TextDecoder().decode(buf.subarray(0, read)))) return undefined;
-      while (read < size) {
-        const { bytesRead } = await handle.read(buf, read, size - read, read);
-        if (bytesRead === 0) break;
-        read += bytesRead;
-      }
-      return new TextDecoder().decode(buf.subarray(0, read));
-    } finally {
-      await handle.close();
-    }
-  }
-  const stat = await vscode.workspace.fs.stat(uri);
-  if (stat.size > MAX_POLICY_BYTES) return undefined;
-  const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
-  return looksLikePolicy(text) ? text : undefined;
-}
-
-/** A document read from or edited on the connected instance, not a workspace file. */
-function isInstanceUri(uri: vscode.Uri): boolean {
-  return uri.scheme.startsWith('apim-');
 }

@@ -62,7 +62,7 @@ export default tseslint.config(
   {
     files: ['packages/**/*.ts', 'extension/**/*.ts', 'bench/**/*.ts'],
     // Each package's vitest config extends the shared one at the root; that's build config.
-    ignores: ['**/vitest.config.ts'],
+    ignores: ['**/vitest.config.mts'],
     plugins: { boundaries },
     rules: { 'boundaries/imports': 'error' },
   },

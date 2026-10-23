@@ -2,10 +2,10 @@ import * as vscode from 'vscode';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import { nodeAt } from '@apim-policy/document';
 import { type Catalog, resolveDef } from '@apim-policy/catalog';
-import type { PolicyIndex } from '../workspace/policyIndex';
+import type { PolicyIndex } from '@apim-policy/workspace';
 
 /** Hover for policy element and attribute names (from the catalog) and named values. */
-export function registerPolicyHover(cache: DocumentCache, catalog: Catalog, index: PolicyIndex): vscode.Disposable {
+export function registerPolicyHover(cache: DocumentCache, catalog: Catalog, index: PolicyIndex<vscode.Uri>): vscode.Disposable {
   return vscode.languages.registerHoverProvider(LANGUAGE_ID, {
     async provideHover(document, position) {
       const offset = document.offsetAt(position);

@@ -3,8 +3,7 @@ import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import { type Document, escapeForDocument, expressionAt, isEscapedFormat, nodeAt } from '@apim-policy/document';
 import { checkFragmentHeader, checkIncludes, checkInternalUse, draftModel, emptyValueFor, type FragmentDoc, type FragmentProblem, type FragmentVariable, type GeneratedTypedefs, type HeaderEntry, headerExpansions, type HeaderModel, type IncludedFragment, inferredTypes, inputUse, insertTag, insertTypedefs, outputsNotAlwaysSet, type PolicySummary, propertiesOfTypeText, readHeaderComment, renderHeader, summarize, tabStops, type TypedefDoc, typeNameFor, unguardedReads } from '@apim-policy/analysis';
 import { fragmentIdsFor, scopeFromInstancePath } from '@apim-policy/core';
-import type { PolicyIndex } from '../workspace/policyIndex';
-import type { ShapeService } from '../workspace/shapes';
+import type { PolicyIndex, ShapeService } from '@apim-policy/workspace';
 
 /** How many variables an inlay hint lists per side before "+N". */
 const HINT_NAMES = 6;
@@ -15,7 +14,7 @@ const HINT_NAMES = 6;
  * diagnostics for a header that disagrees with its fragment and for an include that leaves a
  * required input unset, and code actions that write the header.
  */
-export function registerFragmentDocs(cache: DocumentCache, index: PolicyIndex, shapes: ShapeService): vscode.Disposable {
+export function registerFragmentDocs(cache: DocumentCache, index: PolicyIndex<vscode.Uri>, shapes: ShapeService<vscode.Uri>): vscode.Disposable {
   const summaryOf = (document: vscode.TextDocument) => summarize(cache.get(document));
 
   /** Headers of the fragments a summary includes, by id. */
@@ -55,7 +54,7 @@ export function registerFragmentDocs(cache: DocumentCache, index: PolicyIndex, s
     const severity = unguardedSeverity();
     const sets = severity === undefined ? undefined : await setsFor(summary, document.uri);
     // What broader scopes on the connected instance set; only fetched when something uses it.
-    const outer = summary.includeSites.length || sets ? await index.outerVariables(document) : [];
+    const outer = summary.includeSites.length || sets ? await index.outerVariables(document.uri, cache.get(document)) : [];
     if (document.isClosed || document.version !== version) return;
     const problems: FragmentProblem[] = [];
     if (summary.header) {
@@ -129,7 +128,7 @@ export function registerFragmentDocs(cache: DocumentCache, index: PolicyIndex, s
       if (!summary.includeSites.length) return [];
       const headers = await headersFor(summary, document.uri);
       // Required inputs nothing sets before each include lead its hint, so they're seen without hovering.
-      const outer = await index.outerVariables(document);
+      const outer = await index.outerVariables(document.uri, cache.get(document));
       const setBefore = [...summary.variables, ...outer.map((o) => ({ name: o.name, range: { start: o.at, end: o.at } }))];
       const missing = new Map(checkIncludes(summary.includeSites, setBefore, summary.header?.inputs.map((v) => v.name) ?? [], (id) => headers.get(id)?.header).map((p) => [p.range.start, p.missing ?? []]));
       const hints: vscode.InlayHint[] = [];
@@ -529,7 +528,7 @@ export function registerFragmentDocs(cache: DocumentCache, index: PolicyIndex, s
     if (!site || element?.name !== 'include-fragment') return [];
     const header = (await index.fragment(site.id, document.uri))?.summary.header;
     if (!header?.inputs.length) return [];
-    const outer = await index.outerVariables(document);
+    const outer = await index.outerVariables(document.uri, cache.get(document));
     const before = new Set([...summary.variables.filter((v) => v.range.start < site.range.start).map((v) => v.name), ...outer.filter((o) => o.at < site.range.start).map((o) => o.name), ...(summary.header?.inputs.map((v) => v.name) ?? [])]);
     const unset = header.inputs.filter((v) => !before.has(v.name));
     if (!unset.length) return [];

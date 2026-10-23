@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import { nodeAt } from '@apim-policy/document';
-import type { PolicyIndex } from '../workspace/policyIndex';
+import type { PolicyIndex } from '@apim-policy/workspace';
 
 /** Go-to-definition and links from include-fragment's fragment-id to the fragment file. */
-export function registerFragmentNavigation(cache: DocumentCache, index: PolicyIndex): vscode.Disposable {
+export function registerFragmentNavigation(cache: DocumentCache, index: PolicyIndex<vscode.Uri>): vscode.Disposable {
   const fragmentIdAt = (document: vscode.TextDocument, offset: number) => {
     const hit = nodeAt(cache.get(document), offset);
     if (hit.element?.name !== 'include-fragment' || hit.attribute?.name !== 'fragment-id' || !hit.onAttributeValue) return undefined;

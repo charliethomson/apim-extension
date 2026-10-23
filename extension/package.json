@@ -446,6 +446,7 @@
     "@apim-policy/csharp-engine": "*",
     "@apim-policy/document": "*",
     "@apim-policy/fixtures": "*",
+    "@apim-policy/workspace": "*",
     "@types/mocha": "^10.0.10",
     "@types/vscode": "~1.95.0",
     "@vscode/test-electron": "^3.1.0",

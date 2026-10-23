@@ -1,4 +1,3 @@
-import type * as vscode from 'vscode';
 import { type CSharpEngine, declaredType, displayShaped, exampleCSharp, exampleJson, type JsonShape, type ShapeEnv, shapeOf } from '@apim-policy/csharp-engine';
 import type { Document, Expression } from '@apim-policy/document';
 import { documentShapes, type FragmentDoc, type GeneratedTypedefs, generateTypedefs, outputShapes, propertyDocs, setterTypes, setVariableTargets, summarize, typedefFor, wantedShapes } from '@apim-policy/analysis';
@@ -8,18 +7,18 @@ import type { PolicyIndex } from './policyIndex';
 const MAX_DEPTH = 4;
 
 /**
- * The JSON shapes each document's variables have (shapes.ts in @apim-policy/analysis), including what the
- * fragments it includes set: their declared `@out` types, else what their code builds. Computed
- * once per document version, and again after any indexed file changes.
+ * The JSON shapes each document's variables have (shapes.ts in @apim-policy/analysis), including
+ * what the fragments it includes set: their declared `@out` types, else what their code builds.
+ * Computed once per document version, and again after any indexed file changes.
  */
-export class ShapeService {
+export class ShapeService<U> {
   private memo = new WeakMap<Document, Promise<ShapeEnv>>();
 
   constructor(
-    private readonly index: PolicyIndex,
+    private readonly index: PolicyIndex<U>,
     private readonly engine: () => Promise<CSharpEngine | undefined>,
     /** Where a parse came from, so an instance policy reads the instance's fragments. */
-    private readonly originOf: (doc: Document) => vscode.Uri | undefined = () => undefined,
+    private readonly originOf: (doc: Document) => U | undefined = () => undefined,
   ) {
     index.onDidChange(() => {
       this.memo = new WeakMap();
@@ -173,7 +172,7 @@ export class ShapeService {
     return value;
   }
 
-  private async outputs(id: string, engine: CSharpEngine, seen: ReadonlySet<string>, depth: number, from?: vscode.Uri): Promise<Map<string, JsonShape>> {
+  private async outputs(id: string, engine: CSharpEngine, seen: ReadonlySet<string>, depth: number, from?: U): Promise<Map<string, JsonShape>> {
     if (seen.has(id) || depth >= MAX_DEPTH) return new Map();
     const f = await this.index.fragment(id, from);
     if (!f?.doc) return new Map();

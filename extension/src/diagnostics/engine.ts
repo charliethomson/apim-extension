@@ -3,7 +3,7 @@ import type { CSharpEngine } from '@apim-policy/csharp-engine';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import { resultTypes } from '@apim-policy/analysis';
 import type { Catalog } from '@apim-policy/catalog';
-import type { ShapeService } from '../workspace/shapes';
+import type { ShapeService } from '@apim-policy/workspace';
 
 /**
  * C# errors from the built-in engine: syntax, unknown names and members, argument counts and
@@ -11,7 +11,7 @@ import type { ShapeService } from '../workspace/shapes';
  * must produce a bool, and a `set-variable` value one of the types a variable may hold. Newer-than-7.3 syntax and .NET Framework gaps are left to the
  * compatibility check.
  */
-export function registerEngineDiagnostics(cache: DocumentCache, catalog: Catalog, engine: () => Promise<CSharpEngine | undefined>, shapes: ShapeService): vscode.Disposable {
+export function registerEngineDiagnostics(cache: DocumentCache, catalog: Catalog, engine: () => Promise<CSharpEngine | undefined>, shapes: ShapeService<vscode.Uri>): vscode.Disposable {
   const collection = vscode.languages.createDiagnosticCollection('apim-csharp');
   const timers = new Map<string, NodeJS.Timeout>();
 

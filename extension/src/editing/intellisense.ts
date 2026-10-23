@@ -10,17 +10,16 @@ import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import { type Document, escapeForDocument, type Expression, expressionAt, isEscapedFormat, nodeAt } from '@apim-policy/document';
 import { type Catalog, namesVariable, xmlCompletions, type XmlItem, type XmlItemKind } from '@apim-policy/catalog';
 import { COMMON_HEADERS, type FragmentDoc, keyAccessAt, summarize, variableNameSuggestions } from '@apim-policy/analysis';
-import { within, type PolicyIndex } from '../workspace/policyIndex';
-import type { ShapeService } from '../workspace/shapes';
+import { type PolicyIndex, type ShapeService, within } from '@apim-policy/workspace';
 
 export interface IntellisenseDeps {
   cache: DocumentCache;
   catalog: Catalog;
-  index: PolicyIndex;
+  index: PolicyIndex<vscode.Uri>;
   stubsUri: vscode.Uri;
   /** Resolves to the built-in engine, or undefined when C# features are off. */
   engine: () => Promise<CSharpEngine | undefined>;
-  shapes: ShapeService;
+  shapes: ShapeService<vscode.Uri>;
 }
 
 const XML_KIND: Record<XmlItemKind, vscode.CompletionItemKind> = {
@@ -107,7 +106,7 @@ async function variableNames(deps: IntellisenseDeps, document: vscode.TextDocume
     const header = (await deps.index.fragment(id, document.uri))?.summary.header;
     if (header) includes.push({ id, header });
   }
-  return variableNameSuggestions(includes, summary.header, await deps.index.variables(document));
+  return variableNameSuggestions(includes, summary.header, await deps.index.variables(document.uri, deps.cache.get(document)));
 }
 
 function toXmlItem(document: vscode.TextDocument, i: XmlItem, position: vscode.Position): vscode.CompletionItem {
@@ -140,7 +139,7 @@ async function keyItems(deps: IntellisenseDeps, document: vscode.TextDocument, d
     return item;
   };
   if (access.kind === 'header') return COMMON_HEADERS.map((h) => make(h, vscode.CompletionItemKind.Value, 'header'));
-  const vars = await deps.index.variables(document);
+  const vars = await deps.index.variables(document.uri, deps.cache.get(document));
   return vars.map((v) =>
     make(v.name, vscode.CompletionItemKind.Variable, `${v.type ? `${v.type} · ` : ''}${v.origin ?? `${v.element} in this file`}`, variableDocs(v)),
   );
@@ -178,7 +177,7 @@ function hoverProvider(deps: IntellisenseDeps): vscode.HoverProvider {
 
       const access = keyAccessAt(expr.code, code);
       if (access?.kind === 'variable' && access.key) {
-        const v = (await deps.index.variables(document)).find((x) => x.name === access.key);
+        const v = (await deps.index.variables(document.uri, deps.cache.get(document))).find((x) => x.name === access.key);
         const range = expr.map.rangeToSource(access.range);
         // Names and values come from workspace files, so they go in as text, never as Markdown.
         const md = new vscode.MarkdownString().appendMarkdown('**Variable** ').appendText(access.key);
@@ -254,7 +253,7 @@ function definitionProvider(deps: IntellisenseDeps): vscode.DefinitionProvider {
 
       const access = keyAccessAt(expr.code, code);
       if (access?.kind === 'variable' && access.key) {
-        const v = (await deps.index.variables(document)).find((x) => x.name === access.key);
+        const v = (await deps.index.variables(document.uri, deps.cache.get(document))).find((x) => x.name === access.key);
         if (!v) return undefined;
         const target = await vscode.workspace.openTextDocument(v.uri);
         const origin = expr.map.rangeToSource(access.range);
