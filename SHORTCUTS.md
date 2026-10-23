@@ -44,6 +44,17 @@ publish from this commit gets. It needs full history and tags, and refuses a sha
 
 _Verified: 2026-10-23_
 
+## Did CI pass on a commit?
+
+```sh
+gh api repos/charliethomson/apim-extension/commits/<sha>/statuses --jq 'reduce .[] as $s ({}; .[$s.context] //= $s) | .[] | [.context,.state,.target_url] | @tsv'
+```
+
+Woodpecker (ci.thmsn.dev) reports each pipeline as a `ci/woodpecker/push/<pipeline>` status on
+the commit, newest first, with a link to the run; the query keeps the newest per pipeline. CI runs on push only, so a local commit has none.
+
+_Verified: 2026-10-23_
+
 ## Which build is a running VS Code using?
 
 The first line of the **APIM Policy** output channel (View → Output) once a policy is open:
