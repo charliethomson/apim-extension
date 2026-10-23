@@ -1,7 +1,7 @@
 // Stubs for the Azure API Management policy expression environment.
 //
 // These describe the implicit `context` variable and the helper methods available in
-// @(...) and @{...} expressions, so the C# language server can offer completion, hover and
+// @(...) and @{...} expressions, so the built-in C# engine can offer completion, hover and
 // type checking. They are paraphrased from the policy expressions reference
 // (https://learn.microsoft.com/azure/api-management/api-management-policy-expressions).
 // Microsoft only documents a few of these interface names; the rest are named here by the
@@ -13,12 +13,11 @@
 
 namespace Apim.Policies
 {
-    // Usings live inside the namespace so this file can be appended verbatim to a generated
-    // file that already has its own usings.
     using System;
     using System.Collections.Generic;
     using System.Security.Cryptography;
     using System.Security.Cryptography.X509Certificates;
+    using Newtonsoft.Json.Linq;
 
     /// <summary>The request context available to every policy expression as <c>context</c>.</summary>
     public interface IProxyRequestContext
@@ -212,16 +211,24 @@ namespace Apim.Policies
     /// <summary>GraphQL resolver data.</summary>
     public interface IGraphQL
     {
-        /// <summary>Arguments passed to the resolved field.</summary>
+        /// <summary>Arguments passed to the resolved field, by name.</summary>
+        IGraphQLDataObject Arguments { get; }
+
+        /// <summary>Arguments passed to the resolved field. The reference lists this name; the examples use <see cref="Arguments"/>.</summary>
         IGraphQLDataObject GraphQLArguments { get; }
 
-        /// <summary>Parent object of the resolved field.</summary>
+        /// <summary>Parent object of the resolved field, by field name.</summary>
         IGraphQLDataObject Parent { get; }
     }
 
-    /// <summary>A GraphQL value. Its members aren't documented.</summary>
+    /// <summary>
+    /// A GraphQL value. APIM doesn't document its type; indexing it by field name is what the
+    /// resolver examples do, and JToken fits how they use the result.
+    /// </summary>
     public interface IGraphQLDataObject
     {
+        /// <summary>The field or argument named <paramref name="name"/>.</summary>
+        JToken this[string name] { get; }
     }
 
     /// <summary>The most recent error.</summary>
@@ -505,6 +512,21 @@ namespace Apim.Policies
         public string UserId => throw null;
     }
 
+    /// <summary>
+    /// A connection's authorization context, stored in a variable by get-authorization-context:
+    /// <c>((Authorization)context.Variables.GetValueOrDefault("auth-context"))?.AccessToken</c>.
+    /// </summary>
+    public sealed class Authorization
+    {
+        private Authorization() => throw null;
+
+        /// <summary>Bearer access token for calling the backend.</summary>
+        public string AccessToken => throw null;
+
+        /// <summary>Claims from the authorization server's token response.</summary>
+        public IReadOnlyDictionary<string, object> Claims => throw null;
+    }
+
     /// <summary>A parsed JSON Web Token.</summary>
     public sealed class Jwt
     {
@@ -556,10 +578,24 @@ namespace Apim.Policies
         public static string GetValueOrDefault(this IReadOnlyDictionary<string, string[]> source, string name) => throw null;
 
         /// <summary>
+        /// The value for <paramref name="name"/>, or <paramref name="defaultValue"/> if missing.
+        /// Works on matched URL template parameters.
+        /// </summary>
+        public static string GetValueOrDefault(this IReadOnlyDictionary<string, string> source, string name, string defaultValue) => throw null;
+
+        /// <summary>
+        /// The value for <paramref name="name"/>, or null if missing.
+        /// </summary>
+        public static string GetValueOrDefault(this IReadOnlyDictionary<string, string> source, string name) => throw null;
+
+        /// <summary>
         /// The variable cast to <typeparamref name="T"/>, or <paramref name="defaultValue"/> if it
         /// isn't set. Throws if the stored value isn't a <typeparamref name="T"/>.
         /// </summary>
         public static T GetValueOrDefault<T>(this IReadOnlyDictionary<string, object> variables, string name, T defaultValue) => throw null;
+
+        /// <summary>The variable named <paramref name="name"/>, or null if it isn't set.</summary>
+        public static object GetValueOrDefault(this IReadOnlyDictionary<string, object> variables, string name) => throw null;
 
         /// <summary>
         /// The variable cast to <typeparamref name="T"/>, or default(T) if it isn't set. Throws

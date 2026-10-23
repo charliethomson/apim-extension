@@ -1,0 +1,23 @@
+<policies>
+    <inbound>
+        <base />
+        <set-variable name="status" value="@(context.Response.StatusCode switch { 200 => "ok", _ => "no" })" />
+        <set-variable name="pairs" value="@(new[] { 1, 2, 3 }.Chunk(2).Count())" />
+        <choose>
+            <when condition="@(context.Request.Method)">
+                <set-header name="X-Method" exists-action="override">
+                    <value>@(context.Request.Method)</value>
+                </set-header>
+            </when>
+        </choose>
+    </inbound>
+    <backend>
+        <forward-request />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

@@ -29,7 +29,7 @@ describe('parse: raw format', () => {
 
   it('builds the element tree', () => {
     expect(doc.root?.name).toBe('policies');
-    expect(doc.root?.children.filter((c) => c.type === 'element').map((c) => (c as Element).name)).toEqual([
+    expect(doc.root?.children.filter((c) => c.type === 'element').map((c) => c.name)).toEqual([
       'inbound',
       'backend',
       'outbound',
@@ -153,7 +153,7 @@ describe('parse: tricky expressions', () => {
 });
 
 describe('parse: large APIOps fragment and caller', () => {
-  it.each(['apiops/policyFragments/random-user-pipeline/policy.xml', 'apiops/apis/random-users/policy.xml'])(
+  it.each(['apiops/policyFragments/random-user/policy.xml', 'apiops/apis/random-users/policy.xml'])(
     '%s parses cleanly and every expression is closed where its attribute or element ends',
     (file) => {
       const doc = parse(fixture(file));

@@ -30,28 +30,28 @@ describe('summarize', () => {
   });
 
   it('summarises the random-user fragment and its caller', () => {
-    const frag = summarize(parse(fixture('apiops/policyFragments/random-user-pipeline/policy.xml')));
+    const frag = summarize(parse(fixture('apiops/policyFragments/random-user/policy.xml')));
     const caller = summarize(parse(fixture('apiops/apis/random-users/policy.xml')));
     expect(frag.root).toBe('fragment');
     expect(frag.variables.some((v) => v.name.startsWith('ru-ret-'))).toBe(true);
-    expect(caller.includes).toContain('random-user-pipeline');
+    expect(caller.includes).toContain('random-user');
     expect(caller.variables.some((v) => v.name.startsWith('ru-arg-'))).toBe(true);
   });
 });
 
 describe('knownVariables', () => {
-  const frag = summarize(parse(fixture('apiops/policyFragments/random-user-pipeline/policy.xml')));
+  const frag = summarize(parse(fixture('apiops/policyFragments/random-user/policy.xml')));
   const caller = summarize(parse(fixture('apiops/apis/random-users/policy.xml')));
 
   it('gives a caller the variables its included fragments set', () => {
-    const vars = knownVariables(caller, [], [{ label: 'fragment', fragmentIds: ['random-user-pipeline'], summary: frag }]);
+    const vars = knownVariables(caller, [], [{ label: 'fragment', fragmentIds: ['random-user'], summary: frag }]);
     const ret = vars.find((v) => v.name.startsWith('ru-ret-'))!;
-    expect(ret.origin).toBe('fragment random-user-pipeline');
+    expect(ret.origin).toBe('fragment random-user');
     expect(vars.find((v) => v.name.startsWith('ru-arg-'))?.origin).toBeUndefined();
   });
 
   it('gives a fragment the variables its callers set', () => {
-    const vars = knownVariables(frag, ['random-user-pipeline'], [{ label: 'apis/random-users/policy.xml', fragmentIds: [], summary: caller }]);
+    const vars = knownVariables(frag, ['random-user'], [{ label: 'apis/random-users/policy.xml', fragmentIds: [], summary: caller }]);
     expect(vars.find((v) => v.name.startsWith('ru-arg-'))?.origin).toBe('set by apis/random-users/policy.xml');
   });
 

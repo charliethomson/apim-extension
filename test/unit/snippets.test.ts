@@ -17,14 +17,14 @@ function expand(body: string[]): string {
   // ${1|a,b|} → a ; ${1:default} → default (recursively, inner placeholders first)
   for (let i = 0; i < 10; i++) {
     text = text
-      .replace(/\$\{(\d+)\|([^|]*?)(?:,[^|]*)?\|\}/g, (_, n, first) => (defaults.set(n, first), first))
-      .replace(/\$\{(\d+):((?:[^{}\\]|\\.)*)\}/g, (_, n, d) => {
+      .replace(/\$\{(\d+)\|([^|]*?)(?:,[^|]*)?\|\}/g, (_: string, n: string, first: string) => (defaults.set(n, first), first))
+      .replace(/\$\{(\d+):((?:[^{}\\]|\\.)*)\}/g, (_: string, n: string, d: string) => {
         const v = d.replace(/\\(.)/g, '$1');
         defaults.set(n, v);
         return v;
       });
   }
-  text = text.replace(/\$\{(\d+)\}/g, (_, n) => defaults.get(n) ?? '').replace(/\$\d+/g, '');
+  text = text.replace(/\$\{(\d+)\}/g, (_: string, n: string) => defaults.get(n) ?? '').replace(/\$\d+/g, '');
   return text;
 }
 

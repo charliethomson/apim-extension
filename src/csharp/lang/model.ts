@@ -4,6 +4,7 @@
  * (type references, substitution, member lookup, conversions and display).
  */
 
+import type { JsonShape } from './json';
 import { PREDEFINED_TYPES } from './lexer';
 
 // ---- definitions ------------------------------------------------------------------------------
@@ -41,6 +42,8 @@ export interface MemberDef {
   declaring: TypeDef;
   /** Where a stub member is declared in stubs/ApimContext.cs. */
   location?: Location;
+  /** .NET Framework 4.8, which APIM's expression types come from, doesn't have this member (or overload). */
+  notInFramework?: boolean;
 }
 
 export type TypeKind = 'class' | 'struct' | 'interface' | 'enum' | 'delegate';
@@ -62,6 +65,8 @@ export interface TypeDef {
   doc?: string;
   origin: 'bcl' | 'stub';
   location?: Location;
+  /** .NET Framework 4.8 doesn't have this type. */
+  notInFramework?: boolean;
   /** Members by name, built on first use. */
   byName?: Map<string, MemberDef[]>;
 }
@@ -69,7 +74,8 @@ export interface TypeDef {
 // ---- semantic types ---------------------------------------------------------------------------
 
 export type Type =
-  | { k: 'named'; def: TypeDef; args: Type[] }
+  /** `shape`: what a JSON value holds (see json.ts); ignored by everything that decides what compiles. */
+  | { k: 'named'; def: TypeDef; args: Type[]; shape?: JsonShape }
   | { k: 'array'; element: Type; rank: number }
   | { k: 'param'; name: string }
   | { k: 'null' }
@@ -103,6 +109,7 @@ interface RawMember {
   p?: RawParam[];
   w?: 1;
   d?: string;
+  nf?: 1;
 }
 
 interface RawType {
@@ -113,6 +120,7 @@ interface RawType {
   b?: string;
   i?: string[];
   d?: string;
+  nf?: 1;
   m: RawMember[];
 }
 
@@ -176,6 +184,7 @@ function typeDefFromRaw(key: string, raw: RawType): TypeDef {
     members: [],
     doc: raw.d,
     origin: 'bcl',
+    notInFramework: raw.nf === 1 || undefined,
   };
   for (const m of raw.m) {
     def.members.push({
@@ -190,6 +199,7 @@ function typeDefFromRaw(key: string, raw: RawType): TypeDef {
       doc: m.d,
       writable: !!m.w,
       declaring: def,
+      notInFramework: m.nf === 1 || undefined,
     });
   }
   return def;
@@ -357,8 +367,10 @@ export class TypeModel {
 
   /** Every supertype, nearest first, without duplicates. Includes `t` itself. */
   supertypes(t: Type): Type[] {
+    // The key ignores JSON shapes, so a type carrying one mustn't get (or leave) another's answer.
+    const shaped = hasShape(t);
     const id = typeKey(t);
-    const cached = this.baseCache.get(id);
+    const cached = shaped ? undefined : this.baseCache.get(id);
     if (cached) return cached;
     const out: Type[] = [];
     const seen = new Set<string>();
@@ -371,6 +383,7 @@ export class TypeModel {
       out.push(x);
       queue.push(...this.directSupertypes(x));
     }
+    if (shaped) return out;
     if (this.baseCache.size > 2000) this.baseCache.clear();
     this.baseCache.set(id, out);
     return out;
@@ -498,6 +511,60 @@ export class TypeModel {
     // User-defined implicit operators on either type.
     if (this.userConversion(from, to)) return 4;
     return undefined;
+  }
+
+  /**
+   * Whether the model knows `t` completely: its type arguments, every supertype, and the types
+   * its conversion operators use. Only then can a missing conversion be reported as an error,
+   * since anything the model can't see might supply one.
+   */
+  isDefinite(t: Type): boolean {
+    switch (t.k) {
+      case 'null':
+        return true;
+      case 'array':
+        return this.isDefinite(t.element);
+      case 'named':
+        return t.args.every((a) => this.isDefinite(a)) && this.supertypes(t).every((s) => s.k !== 'named' || this.isComplete(s.def));
+      default:
+        return false;
+    }
+  }
+
+  private readonly completeCache = new Map<string, boolean>();
+
+  private isComplete(def: TypeDef): boolean {
+    const hit = this.completeCache.get(def.key);
+    if (hit !== undefined) return hit;
+    const known = (r: TypeRef): boolean => r.kind === 'param' || (r.kind === 'array' ? known(r.element) : this.defs.has(r.key) && r.args.every(known));
+    const ops = [...(byName(def).get('op_Implicit') ?? []), ...(byName(def).get('op_Explicit') ?? [])];
+    const ok = (!def.base || known(def.base)) && def.interfaces.every(known) && ops.every((m) => known(m.type) && m.params.every((p) => known(p.type)));
+    this.completeCache.set(def.key, ok);
+    return ok;
+  }
+
+  /** Whether a cast from `from` to `to` could compile, for the "missing a cast?" hint. */
+  explicitConversion(from: Type, to: Type): boolean {
+    const f = this.underlying(from);
+    const t = this.underlying(to);
+    const enumOrNumeric = (x: Type) => this.isNumeric(x) || (x.k === 'named' && x.def.kind === 'enum');
+    if (enumOrNumeric(f) && enumOrNumeric(t)) return true;
+    // Downcasts and unboxing.
+    if (this.conversion(to, from) !== undefined) return true;
+    if (this.isReferenceType(f) && this.isReferenceType(t) && ((f.k === 'named' && f.def.kind === 'interface') || (t.k === 'named' && t.def.kind === 'interface'))) return true;
+    for (const x of [t, f]) {
+      if (x.k !== 'named') continue;
+      for (const { member, subst } of this.members(x, 'op_Explicit')) {
+        const p = member.params[0];
+        if (p && sameType(this.resolve(p.type, subst), f) && sameType(this.resolve(member.type, subst), t)) return true;
+      }
+    }
+    return false;
+  }
+
+  /** Whether `t` declares the operator `name` (`op_LogicalNot`, say). */
+  userOperator(t: Type, name: string): boolean {
+    return t.k === 'named' && this.members(t, name).length > 0;
   }
 
   private argsCompatible(def: TypeDef, from: Type[], to: Type[]): boolean {
@@ -657,6 +724,18 @@ export function sameType(a: Type, b: Type): boolean {
     }
     default:
       return true;
+  }
+}
+
+/** Whether `t` or a type argument in it carries a JSON shape. */
+function hasShape(t: Type): boolean {
+  switch (t.k) {
+    case 'named':
+      return !!t.shape || t.args.some(hasShape);
+    case 'array':
+      return hasShape(t.element);
+    default:
+      return false;
   }
 }
 

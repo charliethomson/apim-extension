@@ -5,13 +5,34 @@
  */
 
 import { bind, Binder, type BindResult, type BoundSymbol, type Candidate, type CompletionSite, type Reference } from './binder';
+import { displayShape, displayShaped, NO_SHAPES, shapeAsType, shapeOf, type JsonShape, type ShapeEnv } from './json';
 import { offsetContext, PREDEFINED_TYPES } from './lexer';
-import { TypeModel, type Location, type MemberDef, type RawModel, type Subst, type Type, type TypeDef } from './model';
+import { byName, TypeModel, type Location, type MemberDef, type RawModel, type Subst, type Type, type TypeDef } from './model';
 import { parse, type Parsed } from './parser';
 import { readStubs } from './stubs';
 import type { Span } from './syntax';
 
 export type CodeKind = 'expr' | 'block';
+
+/** Result types a policy attribute can require of its expression (see policy/resultTypes.ts). */
+export type { ResultType } from '../../policy/resultTypes';
+import type { ResultType } from '../../policy/resultTypes';
+
+/** Result types the binder converts to; `variable` is checked against a list afterwards instead. */
+const RESULT_TYPES: Partial<Record<ResultType, string>> = { bool: 'System.Boolean' };
+
+/**
+ * What a `set-variable` value may be, from the policy reference. The gateway refuses anything
+ * else at save ("Expression return type 'System.Object' is not allowed"); nullable forms of the
+ * value types are allowed too.
+ */
+const VARIABLE_TYPES = new Set([
+  'Newtonsoft.Json.Linq.JArray', 'Newtonsoft.Json.Linq.JConstructor', 'Newtonsoft.Json.Linq.JContainer', 'Newtonsoft.Json.Linq.JProperty',
+  'Newtonsoft.Json.Linq.JObject', 'Newtonsoft.Json.Linq.JRaw', 'Newtonsoft.Json.Linq.JToken', 'Newtonsoft.Json.Linq.JValue',
+  'System.Boolean', 'System.SByte', 'System.Byte', 'System.UInt16', 'System.UInt32', 'System.UInt64', 'System.Int16', 'System.Int32',
+  'System.Int64', 'System.Decimal', 'System.Single', 'System.Double', 'System.Guid', 'System.String', 'System.Char', 'System.DateTime',
+  'System.TimeSpan',
+]);
 
 export type EntryKind = 'method' | 'property' | 'field' | 'constant' | 'enumMember' | 'class' | 'interface' | 'struct' | 'enum' | 'delegate' | 'namespace' | 'local' | 'parameter' | 'keyword';
 
@@ -55,6 +76,12 @@ export type DefinitionResult = { kind: 'local'; span: Span } | { kind: 'stub'; l
 
 export interface EngineDiagnostic extends Span {
   message: string;
+  /**
+   * `language-version`: valid C#, but newer than the 7.3 policy expressions are compiled as.
+   * `framework`: a type or member .NET Framework 4.8 doesn't have.
+   * `json-shape`: JSON built differently from the shape it's meant to have (a warning).
+   */
+  code?: 'language-version' | 'framework' | 'json-shape';
 }
 
 /** Hides what policy expressions may not use from completion. */
@@ -64,6 +91,13 @@ export interface UsageFilter {
 }
 
 const ALLOW_ALL: UsageFilter = { type: () => true, member: () => true };
+
+/**
+ * Analysed expressions kept, least recently used dropped first. Every expression in every open
+ * policy is analysed after each edit, so this has to hold all of them (a large policy has a few
+ * hundred) or each pass starts from nothing.
+ */
+const CACHE_ENTRIES = 2000;
 
 /** Stands in for a missing identifier at the cursor, so `a.|` parses as a member access. */
 const CURSOR = '__apim_cursor__';
@@ -88,21 +122,61 @@ export class CSharpEngine {
     return [...this.model.defs.values()].filter((d) => d.origin === 'stub').map((d) => d.name);
   }
 
-  private analyze(code: string, kind: CodeKind): { parsed: Parsed; bound: BindResult } {
-    const key = `${kind}\u0000${code}`;
+  private analyze(code: string, kind: CodeKind, expected?: ResultType, shapes: ShapeEnv = NO_SHAPES, wanted?: JsonShape): { parsed: Parsed; bound: BindResult } {
+    const key = `${kind}\u0000${expected ?? ''}\u0000${shapes.key}\u0000${wanted ? displayShape(this.model, wanted) : ''}\u0000${code}`;
     let hit = this.cache.get(key);
-    if (!hit) {
+    if (hit) {
+      // Most recently used last, so eviction drops what hasn't been asked about longest.
+      this.cache.delete(key);
+    } else {
       const parsed = parse(code, kind);
-      hit = { parsed, bound: bind(this.model, parsed) };
-      if (this.cache.size > 200) this.cache.clear();
-      this.cache.set(key, hit);
+      const target = expected && RESULT_TYPES[expected];
+      hit = { parsed, bound: bind(this.model, parsed, -1, target ? this.model.named(target) : undefined, shapes, wanted && shapeAsType(this.model, wanted)) };
+      if (this.cache.size >= CACHE_ENTRIES) this.cache.delete(this.cache.keys().next().value!);
     }
+    this.cache.set(key, hit);
     return hit;
   }
 
-  diagnostics(code: string, kind: CodeKind): EngineDiagnostic[] {
+  /** Errors in one expression. `expected` is the type its attribute needs, when that's known. */
+  /** `shapes` and `wanted` add the JSON-shape warnings: what the code builds against what it should. */
+  diagnostics(code: string, kind: CodeKind, expected?: ResultType, shapes?: ShapeEnv, wanted?: JsonShape): EngineDiagnostic[] {
+    const { parsed, bound } = this.analyze(code, kind, expected, shapes, wanted);
+    const out = [...parsed.errors, ...bound.diagnostics];
+    if (expected === 'variable' && out.length === 0 && !this.isVariableType(bound.resultType)) {
+      out.push({ start: 0, end: code.length, message: `A set-variable value can't be '${this.model.display(bound.resultType)}'. Use a string, bool, number, char, Guid, DateTime, TimeSpan, byte[] or JSON (JToken) value.` });
+    }
+    return out.sort((a, b) => a.start - b.start);
+  }
+
+  /** Unknown and null results pass: the engine can't tell, so the gateway decides. */
+  private isVariableType(t: Type): boolean {
+    if (t.k === 'unknown' || t.k === 'null' || t.k === 'param') return true;
+    if (t.k === 'array') return t.rank === 1 && t.element.k === 'named' && (t.element.def.key === 'System.Byte' || t.element.def.key === 'System.SByte');
+    const u = this.model.underlying(t);
+    if (u.k !== 'named') return false;
+    // context's own types (IResponse, …) aren't on the list, but the engine can't be sure they're refused.
+    return u.def.origin === 'stub' || VARIABLE_TYPES.has(u.def.key);
+  }
+
+  /**
+   * What the gateway would reject even though modern C# accepts it: syntax newer than C# 7.3,
+   * and types and members .NET Framework 4.8 doesn't have. Separate from `diagnostics` because
+   * it applies whichever C# implementation is checking types.
+   */
+  compatibility(code: string, kind: CodeKind): EngineDiagnostic[] {
     const { parsed, bound } = this.analyze(code, kind);
-    return [...parsed.errors, ...bound.diagnostics].sort((a, b) => a.start - b.start);
+    const out: EngineDiagnostic[] = [...parsed.errors, ...bound.diagnostics].filter((d) => d.code === 'language-version');
+    for (const r of bound.references) {
+      if (r.member?.notInFramework) {
+        const name = `${r.def.name}.${r.member.kind === 'ctor' ? r.def.name : r.member.name}`;
+        const others = (byName(r.def).get(r.member.name) ?? []).some((x) => !x.notInFramework);
+        out.push({ start: r.span.start, end: r.span.end, code: 'framework', message: others ? `This overload of '${name}' isn't in .NET Framework 4.8, and policy expressions use .NET Framework types.` : `'${name}' isn't in .NET Framework 4.8, and policy expressions use .NET Framework types.` });
+      } else if (!r.member && r.def.notInFramework) {
+        out.push({ start: r.span.start, end: r.span.end, code: 'framework', message: `'${r.def.name}' isn't in .NET Framework 4.8, and policy expressions use .NET Framework types.` });
+      }
+    }
+    return out.sort((a, b) => a.start - b.start);
   }
 
   references(code: string, kind: CodeKind): Reference[] {
@@ -114,13 +188,37 @@ export class CSharpEngine {
     return this.model.display(this.analyze(code, kind).bound.resultType);
   }
 
+  /** What the expression's JSON value holds, when the code shows it (see json.ts). */
+  resultShape(code: string, kind: CodeKind, shapes: ShapeEnv = NO_SHAPES): JsonShape | undefined {
+    return shapeOf(this.analyze(code, kind, undefined, shapes).bound.resultType);
+  }
+
+  /** The `new JObject` at `offset` (on its `new JObject` text) and the shape it builds. */
+  createdShapeAt(code: string, kind: CodeKind, offset: number, shapes: ShapeEnv = NO_SHAPES): { span: Span; shape: JsonShape } | undefined {
+    const created = bind(this.model, parse(code, kind), offset, undefined, shapes).created;
+    const shape = created && shapeOf(created.type);
+    return created && shape ? { span: created.span, shape } : undefined;
+  }
+
+  /** A shape as text: `{ someData: int }`. */
+  displayShape(shape: JsonShape): string {
+    return displayShape(this.model, shape);
+  }
+
   // ---- completion -------------------------------------------------------------------------------
 
-  complete(code: string, kind: CodeKind, offset: number): CompletionResult | undefined {
-    if (offsetContext(code, offset) !== 'code') return undefined;
+  complete(code: string, kind: CodeKind, offset: number, shapes: ShapeEnv = NO_SHAPES, wanted?: JsonShape): CompletionResult | undefined {
+    const where = offsetContext(code, offset);
+    const want = wanted && shapeAsType(this.model, wanted);
+    // In a string, only a JSON key completes: `o["…"]` on a shaped object, or one a JObject being built should have.
+    if (where === 'string') {
+      const site = bind(this.model, parse(code, kind), offset, undefined, shapes, want).completion;
+      return site?.kind === 'jsonKey' ? { entries: this.entries(site, kind), span: site.span } : undefined;
+    }
+    if (where !== 'code') return undefined;
     const atWord = offset > 0 && /[\p{L}\p{Nd}_]/u.test(code[offset - 1]);
     const text = atWord ? code : code.slice(0, offset) + CURSOR + code.slice(offset);
-    const bound = bind(this.model, parse(text, kind), offset);
+    const bound = bind(this.model, parse(text, kind), offset, undefined, shapes, want);
     const site = bound.completion;
     if (!site) return undefined;
     const span = atWord ? site.span : { start: offset, end: offset };
@@ -143,6 +241,14 @@ export class CSharpEngine {
         if (t.k === 'tuple') return t.elements.map((e, i) => ({ label: e.name ?? `Item${i + 1}`, kind: 'field', detail: m.display(e.type), sortText: `1${i}` }));
         return this.memberEntries(t, false);
       }
+      case 'jsonKey':
+        return [...site.shape.fields].map(([k, t], i) => ({
+          label: k,
+          kind: 'property' as const,
+          detail: `${k}${site.shape.optional?.has(k) ? '?' : ''}: ${displayShaped(m, t)}`,
+          documentation: site.shape.docs?.get(k),
+          sortText: `0${String(i).padStart(4, '0')}`,
+        }));
       case 'initializer': {
         if (site.type.k !== 'named') return [];
         return this.memberEntries(site.type, false).filter((e) => (e.kind === 'property' || e.kind === 'field') && !site.assigned.includes(e.label) && this.isWritable(site.type, e.label));
@@ -151,7 +257,11 @@ export class CSharpEngine {
         const out: CompletionEntry[] = [];
         if (!site.typeOnly) {
           for (const l of site.locals) {
-            out.push({ label: l.name, kind: l.kind === 'local' ? 'local' : 'parameter', detail: `${m.display(l.type)} ${l.name}`, documentation: l.kind === 'context' ? docOf(l.type) : undefined, sortText: `0${l.name}` });
+            if (l.kind === 'function' && l.fn) {
+              out.push({ label: l.name, kind: 'method', detail: this.localFunctionSignature(l.fn), sortText: `0${l.name}` });
+              continue;
+            }
+            out.push({ label: l.name, kind: l.kind === 'parameter' ? 'parameter' : 'local', detail: `${m.display(l.type)} ${l.name}`, documentation: l.kind === 'context' ? docOf(l.type) : undefined, sortText: `0${l.name}` });
           }
           for (const k of EXPRESSION_KEYWORDS) out.push({ label: k, kind: 'keyword', sortText: `3${k}` });
           if (kind === 'block') for (const k of STATEMENT_KEYWORDS) out.push({ label: k, kind: 'keyword', sortText: `3${k}` });
@@ -202,12 +312,12 @@ export class CSharpEngine {
       const mem = x.member;
       if (mem.kind === 'ctor' || mem.kind === 'operator' || mem.kind === 'indexer') continue;
       if (mem.isStatic !== statics) continue;
-      if (!this.filter.member(mem.declaring, mem)) continue;
+      if (mem.notInFramework || !this.filter.member(mem.declaring, mem)) continue;
       add(x);
     }
     if (!statics) {
       for (const c of new Binder(m).extensionsFor(t)) {
-        if (!this.filter.member(c.member.declaring, c.member)) continue;
+        if (c.member.notInFramework || !this.filter.member(c.member.declaring, c.member)) continue;
         // An instance member of the same name hides the extension in the list.
         if (groups.get(c.member.name)?.some((x) => !x.extension && x.member.kind !== 'method')) continue;
         add(c);
@@ -231,9 +341,10 @@ export class CSharpEngine {
 
   // ---- hover --------------------------------------------------------------------------------------
 
-  hover(code: string, kind: CodeKind, offset: number): HoverResult | undefined {
-    if (offsetContext(code, offset) !== 'code') return undefined;
-    const bound = bind(this.model, parse(code, kind), offset);
+  hover(code: string, kind: CodeKind, offset: number, shapes: ShapeEnv = NO_SHAPES, wanted?: JsonShape): HoverResult | undefined {
+    const where = offsetContext(code, offset);
+    if (where !== 'code' && where !== 'string') return undefined;
+    const bound = bind(this.model, parse(code, kind), offset, undefined, shapes, wanted && shapeAsType(this.model, wanted));
     const h = bound.hover;
     if (!h) return undefined;
     return { span: h.span, ...this.describe(h.symbol) };
@@ -244,9 +355,13 @@ export class CSharpEngine {
     switch (symbol.kind) {
       case 'local': {
         const l = symbol.local;
-        const label = l.kind === 'local' ? '(local variable)' : '(parameter)';
-        return { signature: `${label} ${m.display(l.type)} ${l.name}`, documentation: l.kind === 'context' ? docOf(l.type) : undefined };
+        if (l.kind === 'function' && l.fn) return { signature: `(local function) ${this.localFunctionSignature(l.fn)}` };
+        const label = l.kind === 'local' ? '(local variable)' : l.kind === 'range' ? '(range variable)' : '(parameter)';
+        const shape = shapeOf(l.type);
+        return { signature: `${label} ${m.display(l.type)} ${l.name}${shape ? ` // ${displayShape(m, shape)}` : ''}`, documentation: l.kind === 'context' ? docOf(l.type) : undefined };
       }
+      case 'jsonKey':
+        return { signature: `(JSON key) ${symbol.name}: ${displayShaped(m, symbol.type)}`, documentation: symbol.doc };
       case 'namespace':
         return { signature: `namespace ${symbol.name}` };
       case 'type': {
@@ -261,6 +376,14 @@ export class CSharpEngine {
         return { signature: this.signatureOf(c, symbol.subst), documentation: symbol.member.doc };
       }
     }
+  }
+
+  /** `int Twice(int x)`. */
+  private localFunctionSignature(fn: MemberDef): string {
+    const m = this.model;
+    const typeParams = fn.typeParams.length ? `<${fn.typeParams.join(', ')}>` : '';
+    const params = fn.params.map((p) => `${p.modifier ? `${p.modifier} ` : ''}${m.display(m.resolve(p.type))} ${p.name}${p.defaultText !== undefined ? ` = ${p.defaultText}` : ''}`).join(', ');
+    return `${m.display(m.resolve(fn.type))} ${fn.name}${typeParams}(${params})`;
   }
 
   /** `string string.Substring(int startIndex, int length)`, `IRequest IProxyRequestContext.Request { get; }`. */

@@ -1,5 +1,5 @@
 /**
- * Syntax tree for C# 7.3 expressions and statements. Offsets are in the code being parsed,
+ * Syntax tree for C# 7.3 expressions and statements, the language policy expressions use. Offsets are in the code being parsed,
  * end-exclusive. Incomplete input still produces a tree: a missing identifier is a `name` (or a
  * member access) with an empty `name`, and a missing operand is a `missing` node.
  */
@@ -53,7 +53,7 @@ export interface LambdaParam extends Span {
 export interface Initializer extends Span {
   kind: 'object' | 'collection';
   /** Object initializers: `Name = value`. Collection initializers: values, or `{ k, v }` as a `tuple`-less list. */
-  members: { name?: string; nameSpan?: Span; value: Expr }[];
+  members: { name?: string; nameSpan?: Span; value: Expr; index?: ArgumentList }[];
 }
 
 export interface Designation extends Span {
@@ -87,7 +87,33 @@ export type Expr =
   | (Span & { kind: 'checked'; inner: Expr })
   | (Span & { kind: 'throw'; operand: Expr })
   | (Span & { kind: 'declaration'; type: TypeNode; designation: Designation })
-  | (Span & { kind: 'arrayInit'; items: Expr[] });
+  | (Span & { kind: 'arrayInit'; items: Expr[] })
+  | (Span & { kind: 'query'; from: FromClause; body: QueryBody });
+
+// ---- LINQ query expressions -------------------------------------------------------------------
+
+/** `from T x in source`, which also starts a query. */
+export interface FromClause extends Span {
+  kind: 'from';
+  type?: TypeNode;
+  designation: Designation;
+  source: Expr;
+}
+
+export type QueryClause =
+  | FromClause
+  | (Span & { kind: 'let'; designation: Designation; value: Expr })
+  | (Span & { kind: 'where'; condition: Expr })
+  | (Span & { kind: 'join'; type?: TypeNode; designation: Designation; source: Expr; outerKey: Expr; innerKey: Expr; into?: Designation })
+  | (Span & { kind: 'orderby'; keys: Expr[] });
+
+export interface QueryBody extends Span {
+  clauses: QueryClause[];
+  /** `select x`, or `group x by k`. Missing when the query is still being typed. */
+  final?: (Span & { kind: 'select'; value: Expr }) | (Span & { kind: 'group'; value: Expr; key: Expr });
+  /** `into y ...`: the query continues with `y` as its range variable. */
+  continuation?: { designation: Designation; body: QueryBody };
+}
 
 // ---- statements -----------------------------------------------------------------------------
 
@@ -131,8 +157,22 @@ export type Stmt =
   | (Span & { kind: 'using'; resource: Stmt; body: Stmt })
   | (Span & { kind: 'lock'; value: Expr; body: Stmt })
   | (Span & { kind: 'break' })
-  | (Span & { kind: 'continue' });
+  | (Span & { kind: 'continue' })
+  | LocalFunction;
+
+/** `T Name(T a, T b) { ... }` or `=> expr;` inside a block (C# 7.0). */
+export interface LocalFunction extends Span {
+  kind: 'localFunction';
+  name: string;
+  nameSpan: Span;
+  typeParams: Designation[];
+  returnType: TypeNode;
+  params: (LambdaParam & { defaultValue?: Expr; isParams?: boolean })[];
+  body: Expr | Block;
+}
 
 export interface SyntaxError extends Span {
   message: string;
+  /** `language-version` for valid C# that's newer than the 7.3 policy expressions accept. */
+  code?: 'language-version';
 }

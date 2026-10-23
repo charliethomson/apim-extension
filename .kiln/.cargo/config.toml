@@ -1,0 +1,5 @@
+# Lets cargo fetch the ssh:// kiln and libci dependencies with the system git (and so the ssh
+# agent and known_hosts) when building from inside `.kiln/`. CI runs from the repo root, which
+# the root `.cargo/config.toml` covers.
+[net]
+git-fetch-with-cli = true

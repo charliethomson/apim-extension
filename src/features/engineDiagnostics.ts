@@ -1,42 +1,47 @@
 import * as vscode from 'vscode';
 import type { CSharpEngine } from '../csharp/lang/service';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
+import { resultTypes } from '../policy/resultTypes';
+import type { Catalog } from '../policy/schema';
+import type { ShapeService } from './shapes';
 
 /**
- * C# errors from the built-in engine (syntax, unknown names and members, wrong argument counts)
- * for policies the C# server isn't type-checking: in `builtin` mode, without the C# extension, in
- * Restricted Mode, and in `virtual` mode, where the server only gives completion.
+ * C# errors from the built-in engine: syntax, unknown names and members, argument counts and
+ * types, failed conversions and missing returns. Expressions in bool attributes (`condition`)
+ * must produce a bool, and a `set-variable` value one of the types a variable may hold. Newer-than-7.3 syntax and .NET Framework gaps are left to the
+ * compatibility check.
  */
-export function registerEngineDiagnostics(
-  cache: DocumentCache,
-  engine: () => Promise<CSharpEngine | undefined>,
-  /** Resolves to true when the C# server is pulling diagnostics itself. */
-  serverChecks: () => Promise<boolean>,
-  /** Fires when that may have changed (workspace trust granted). */
-  refreshAll: vscode.Event<void>,
-): vscode.Disposable {
-  const collection = vscode.languages.createDiagnosticCollection('apim-csharp-builtin');
+export function registerEngineDiagnostics(cache: DocumentCache, catalog: Catalog, engine: () => Promise<CSharpEngine | undefined>, shapes: ShapeService): vscode.Disposable {
+  const collection = vscode.languages.createDiagnosticCollection('apim-csharp');
   const timers = new Map<string, NodeJS.Timeout>();
 
   const refresh = async (document: vscode.TextDocument) => {
     if (document.languageId !== LANGUAGE_ID || document.isClosed) return;
     const version = document.version;
     const doc = cache.get(document);
-    const e = doc.expressions.length > 0 && !(await serverChecks()) ? await engine() : undefined;
+    const e = doc.expressions.length > 0 ? await engine() : undefined;
     if (document.isClosed || document.version !== version) return;
     if (!e) {
       collection.delete(document.uri);
       return;
     }
     const out: vscode.Diagnostic[] = [];
+    const types = resultTypes(doc, catalog);
+    // A set-variable building a variable with a declared JSON shape is checked against it.
+    const wanted = await shapes.wanted(doc);
+    if (document.isClosed || document.version !== version) return;
     for (const expr of doc.expressions) {
-      for (const d of e.diagnostics(expr.code, expr.kind)) {
+      const expected = types.get(expr);
+      for (const d of e.diagnostics(expr.code, expr.kind, expected, undefined, wanted.get(expr))) {
+        if (d.code === 'language-version') continue;
         // Zero-width errors (a missing ';') get the character before them so they're visible.
         const span = d.end > d.start ? d : { start: Math.max(0, d.start - 1), end: Math.max(d.start, 1) };
         const range = expr.map.rangeToSource({ start: Math.min(span.start, expr.code.length), end: Math.min(span.end, expr.code.length) });
         if (!range) continue;
-        const diag = new vscode.Diagnostic(toRange(document, range), d.message, vscode.DiagnosticSeverity.Error);
+        // JSON built unlike its declared shape still compiles: a warning, not an error.
+        const diag = new vscode.Diagnostic(toRange(document, range), d.message, d.code === 'json-shape' ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error);
         diag.source = 'apim (C#)';
+        if (d.code === 'json-shape') diag.code = 'json-shape';
         out.push(diag);
       }
     }
@@ -56,7 +61,6 @@ export function registerEngineDiagnostics(
   return vscode.Disposable.from(
     collection,
     vscode.workspace.onDidOpenTextDocument((d) => schedule(d, 0)),
-    refreshAll(() => vscode.workspace.textDocuments.forEach((d) => schedule(d, 0))),
     vscode.workspace.onDidChangeTextDocument((e) => schedule(e.document)),
     vscode.workspace.onDidCloseTextDocument((d) => collection.delete(d.uri)),
     { dispose: () => timers.forEach(clearTimeout) },

@@ -193,6 +193,12 @@ policy content, as in `when`/`otherwise`/`retry`/`limit-concurrency`/`wait`) and
 
 ## 4. C# features inside expressions (spike first)
 
+> **Superseded (2026-10-23).** Everything below about the shadow file and forwarding to the C#
+> extension was built, then replaced by the extension's own C# engine (`src/csharp/lang/`), which
+> needs no .NET SDK or other extension, checks the C# 7.3 and .NET Framework limits the C#
+> extension couldn't, and doesn't write a file per policy. The spike and the forwarding code are
+> in git history before that date.
+
 **Shadow source.** For each policy document, generate one C# file:
 
 ```csharp
@@ -370,8 +376,9 @@ What I learned from it:
 
 ## Standards
 
-This repo vendors [`standards/`](standards/), and [`AGENTS.md`](AGENTS.md) lists the
-overrides for a TypeScript extension. What changes here:
+This repo follows the [shared standards](https://standards.thmsn.dev) (via the `standards`
+MCP), and [`AGENTS.md`](AGENTS.md) lists the overrides for a TypeScript extension. What
+changes here:
 
 - **Versioning.** The version is derived as `MAJOR.MINOR.<commit count>` by
   `scripts/ci/version.sh`, and `npm run package` passes it to vsce. The `package.json`

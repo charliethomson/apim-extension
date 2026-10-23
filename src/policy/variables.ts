@@ -7,6 +7,7 @@
 import type { Document, Element, Expression, Node } from '../parser/ast';
 import { lex, type Token } from '../parser/csharpLexer';
 import type { OffsetRange } from '../sourceMap';
+import { fragmentDoc, variableReads, type FragmentDoc, type FragmentVariable, type IncludeSite, type VariableRead } from './fragmentDoc';
 
 export interface VariableDef {
   name: string;
@@ -22,16 +23,30 @@ export interface PolicySummary {
   root?: 'policies' | 'fragment';
   /** Fragment ids used by include-fragment. */
   includes: string[];
+  /** Each include-fragment with a literal id, in document order. */
+  includeSites: IncludeSite[];
   variables: VariableDef[];
+  /** Variables read by a literal key, in document order. */
+  reads: VariableRead[];
   namedValues: string[];
+  /** A fragment's documented inputs and outputs (see fragmentDoc.ts). */
+  header?: FragmentDoc;
 }
 
+/** One summary per parsed document: the document cache hands back the same object per version. */
+const summaries = new WeakMap<Document, PolicySummary>();
+
 export function summarize(doc: Document): PolicySummary {
+  const hit = summaries.get(doc);
+  if (hit) return hit;
   const out: PolicySummary = {
     root: doc.root?.name === 'policies' || doc.root?.name === 'fragment' ? doc.root.name : undefined,
     includes: [],
+    includeSites: [],
     variables: [],
+    reads: variableReads(doc),
     namedValues: [],
+    header: fragmentDoc(doc),
   };
   const nvs = new Set<string>();
   const visit = (nodes: Node[]) => {
@@ -45,6 +60,7 @@ export function summarize(doc: Document): PolicySummary {
   };
   visit(doc.children);
   out.namedValues = [...nvs];
+  summaries.set(doc, out);
   return out;
 }
 
@@ -55,7 +71,10 @@ function collect(el: Element, out: PolicySummary): void {
   };
   if (el.name === 'include-fragment') {
     const id = literal('fragment-id');
-    if (id) out.includes.push(id.value!.trim());
+    if (id) {
+      out.includes.push(id.value!.trim());
+      out.includeSites.push({ id: id.value!.trim(), range: id.valueRange!, end: el.range.end });
+    }
   }
   if (el.name === 'set-variable') {
     const name = literal('name');
@@ -82,6 +101,9 @@ export interface KnownVariable extends VariableDef {
   origin?: string;
   /** The `key` of the related file that defines it; undefined for this file. */
   originKey?: string;
+  /** From a fragment header's @in or @out. */
+  type?: string;
+  description?: string;
 }
 
 export interface RelatedFile {
@@ -98,17 +120,34 @@ export interface RelatedFile {
  */
 export function knownVariables(self: PolicySummary, selfFragmentIds: readonly string[], others: readonly RelatedFile[]): KnownVariable[] {
   const out = new Map<string, KnownVariable>();
-  const add = (vars: VariableDef[], origin?: string, originKey?: string) => {
-    for (const v of vars) if (!out.has(v.name)) out.set(v.name, { ...v, origin, originKey });
+  const add = (vars: VariableDef[], origin?: string, originKey?: string, documented: readonly FragmentVariable[] = []) => {
+    for (const v of vars) {
+      if (out.has(v.name)) continue;
+      const doc = documented.find((d) => d.name === v.name);
+      out.set(v.name, { ...v, origin, originKey, type: doc?.type, description: doc?.description || undefined });
+    }
   };
-  add(self.variables);
+  /** A header's variables as definitions at their place in the header. */
+  const fromHeader = (vars: readonly FragmentVariable[], element: string): VariableDef[] => vars.map((v) => ({ name: v.name, range: v.range, element }));
+  // A fragment's own variables take their docs from its @out and @internal lines.
+  add(self.variables, undefined, undefined, [...(self.header?.outputs ?? []), ...(self.header?.internals.filter((v) => !v.name.includes('*')) ?? [])]);
   for (const o of others) {
-    if (o.fragmentIds.some((id) => self.includes.includes(id))) add(o.summary.variables, `fragment ${o.fragmentIds[0]}`, o.key);
+    if (!o.fragmentIds.some((id) => self.includes.includes(id))) continue;
+    const outputs = o.summary.header?.outputs ?? [];
+    add(o.summary.variables.filter((v) => !o.summary.header || outputs.some((d) => d.name === v.name)), `fragment ${o.fragmentIds[0]}`, o.key, outputs);
+    add(fromHeader(outputs, '@out'), `fragment ${o.fragmentIds[0]}`, o.key, outputs);
   }
   if (self.root === 'fragment') {
     for (const o of others) {
       if (o.summary.includes.some((id) => selfFragmentIds.includes(id))) add(o.summary.variables, `set by ${o.label}`, o.key);
     }
+  }
+  // A fragment's own documented inputs: a caller's definition stays (it has the value) and takes
+  // the header's docs; one no caller sets is offered from the header.
+  for (const v of self.header?.inputs ?? []) {
+    const known = out.get(v.name);
+    if (known) out.set(v.name, { ...known, type: known.type ?? v.type, description: known.description ?? (v.description || undefined) });
+    else add(fromHeader([v], '@in'), 'documented @in', undefined, [v]);
   }
   return [...out.values()];
 }

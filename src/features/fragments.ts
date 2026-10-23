@@ -17,7 +17,7 @@ export function registerFragmentNavigation(cache: DocumentCache, index: PolicyIn
         const attr = fragmentIdAt(document, document.offsetAt(position));
         if (!attr?.value || !attr.valueRange) return undefined;
         const origin = toRange(document, attr.valueRange);
-        const uris = await index.fragmentFiles(attr.value.trim());
+        const uris = await index.fragmentFiles(attr.value.trim(), document.uri);
         return uris.map<vscode.LocationLink>((targetUri) => ({
           originSelectionRange: origin,
           targetUri,
@@ -34,7 +34,7 @@ export function registerFragmentNavigation(cache: DocumentCache, index: PolicyIn
             if (n.type !== 'element') continue;
             const attr = n.name === 'include-fragment' ? n.attributes.find((a) => a.name === 'fragment-id') : undefined;
             if (attr?.value && attr.valueRange) {
-              const [target] = await index.fragmentFiles(attr.value.trim());
+              const [target] = await index.fragmentFiles(attr.value.trim(), document.uri);
               if (target) {
                 const link = new vscode.DocumentLink(toRange(document, attr.valueRange), target);
                 link.tooltip = `Open fragment ${attr.value.trim()}`;

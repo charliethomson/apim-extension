@@ -1,0 +1,6 @@
+# The `.kiln/` crate reads as the kiln and libci code it calls into, which run
+# wide. A standalone workspace inherits nothing from the repo root (which has no
+# rustfmt.toml and so takes the 100-column default), so the setting is repeated
+# here rather than shared.
+max_width = 120
+use_small_heuristics = "Max"

@@ -1,12 +1,8 @@
 import * as vscode from 'vscode';
 import type { Allowlist } from '../csharp/allowedTypes';
-import { lintAllowedTypes, lintReferences } from '../csharp/allowedTypes';
-import type { ShadowBackend, SyncedShadow } from '../csharp/backend';
+import { lintAllowedTypes, lintReferences, type LintFinding } from '../csharp/allowedTypes';
 import type { CSharpEngine } from '../csharp/lang/service';
-import { methodAt } from '../csharp/shadow';
-import { decodeSemanticTokens, MEMBER_TOKENS, parseHoverSymbol, TYPE_TOKENS } from '../csharp/semanticLint';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
-import { log } from '../log';
 import type { OffsetRange } from '../sourceMap';
 
 interface Finding {
@@ -18,23 +14,27 @@ interface Finding {
 /**
  * Flags types and members outside APIM's allowlist. The syntactic pass runs on every change;
  * a semantic pass then catches what the syntax can't (instance members on restricted types,
- * aliases): from the C# server's semantic tokens when it's available, otherwise from what the
- * built-in engine bound.
+ * aliases) from what the built-in engine bound.
  */
-export function registerAllowlistLint(
-  cache: DocumentCache,
-  allow: Allowlist,
-  /** Fires when the backend may have become available (workspace trust granted). */
-  refreshAll: vscode.Event<void>,
-  backend: () => Promise<ShadowBackend | undefined>,
-  engine: () => Promise<CSharpEngine | undefined>,
-): vscode.Disposable {
+export function registerAllowlistLint(cache: DocumentCache, allow: Allowlist, engine: () => Promise<CSharpEngine | undefined>): vscode.Disposable {
   const collection = vscode.languages.createDiagnosticCollection('apim-allowlist');
   const timers = new Map<string, NodeJS.Timeout>();
-  const suspicious = allow.suspiciousMembers();
+  // The syntactic pass depends only on the code, and an edit changes one expression, so the
+  // rest come from here. Least recently used is dropped first.
+  const lintCache = new Map<string, LintFinding[]>();
+  const lint = (code: string): LintFinding[] => {
+    let hit = lintCache.get(code);
+    if (hit) lintCache.delete(code);
+    else {
+      hit = lintAllowedTypes(code, allow);
+      if (lintCache.size >= 2000) lintCache.delete(lintCache.keys().next().value!);
+    }
+    lintCache.set(code, hit);
+    return hit;
+  };
 
   const severity = (): vscode.DiagnosticSeverity | undefined => {
-    const s = vscode.workspace.getConfiguration('apimPolicy').get<string>('allowedTypes.severity', 'warning');
+    const s = vscode.workspace.getConfiguration('apimPolicy').get<string>('allowedTypes.severity', 'error');
     return s === 'off' ? undefined : s === 'error' ? vscode.DiagnosticSeverity.Error : s === 'information' ? vscode.DiagnosticSeverity.Information : vscode.DiagnosticSeverity.Warning;
   };
 
@@ -60,51 +60,29 @@ export function registerAllowlistLint(
     );
   };
 
-  const tokens = new Map<string, vscode.CancellationTokenSource>();
-
   const refresh = async (document: vscode.TextDocument) => {
-    const key = document.uri.toString();
-    tokens.get(key)?.cancel();
-    const cts = new vscode.CancellationTokenSource();
-    tokens.set(key, cts);
-    const current = () => !cts.token.isCancellationRequested && !document.isClosed;
     if (document.languageId !== LANGUAGE_ID || document.isClosed) return;
     const version = document.version;
     const doc = cache.get(document);
     const syntactic: Finding[] = [];
     for (const e of doc.expressions) {
-      for (const f of lintAllowedTypes(e.code, allow)) {
+      for (const f of lint(e.code)) {
         const range = e.map.rangeToSource(f.range);
         if (range) syntactic.push({ range, message: f.message, code: f.kind === 'type' ? 'disallowed-type' : 'disallowed-member' });
       }
     }
     publish(document, syntactic);
 
-    const b = doc.expressions.length > 0 ? await backend() : undefined;
-    if (!b) {
-      const e = doc.expressions.length > 0 ? await engine() : undefined;
-      if (!e || !current() || document.version !== version) return;
-      const semantic: Finding[] = [];
-      for (const expr of doc.expressions) {
-        for (const f of lintReferences(e.references(expr.code, expr.kind), allow)) {
-          const range = expr.map.rangeToSource(f.range);
-          if (range) semantic.push({ range, message: f.message, code: f.kind === 'type' ? 'disallowed-type' : 'disallowed-member' });
-        }
+    const e = doc.expressions.length > 0 ? await engine() : undefined;
+    if (!e || document.isClosed || document.version !== version) return;
+    const semantic: Finding[] = [];
+    for (const expr of doc.expressions) {
+      for (const f of lintReferences(e.references(expr.code, expr.kind), allow)) {
+        const range = expr.map.rangeToSource(f.range);
+        if (range) semantic.push({ range, message: f.message, code: f.kind === 'type' ? 'disallowed-type' : 'disallowed-member' });
       }
-      publish(document, [...syntactic, ...semantic]);
-      return;
     }
-    if (!current()) return;
-    try {
-      const synced = await b.sync(document);
-      if (!synced || document.version !== version || synced.version !== version) return;
-      const semantic = await semanticFindings(synced, allow, suspicious, cts.token);
-      if (!current()) return;
-      if (document.version !== version) return;
-      publish(document, [...syntactic, ...semantic]);
-    } catch (e) {
-      log().warn(`allowlist semantic pass failed: ${(e as Error).message}`);
-    }
+    publish(document, [...syntactic, ...semantic]);
   };
 
   const schedule = (document: vscode.TextDocument, delay = 500) => {
@@ -120,61 +98,11 @@ export function registerAllowlistLint(
   return vscode.Disposable.from(
     collection,
     vscode.workspace.onDidOpenTextDocument((d) => schedule(d, 0)),
-    refreshAll(() => vscode.workspace.textDocuments.forEach((d) => schedule(d, 0))),
     vscode.workspace.onDidChangeTextDocument((e) => schedule(e.document)),
-    vscode.workspace.onDidCloseTextDocument((d) => {
-      tokens.get(d.uri.toString())?.cancel();
-      tokens.delete(d.uri.toString());
-      collection.delete(d.uri);
-    }),
+    vscode.workspace.onDidCloseTextDocument((d) => collection.delete(d.uri)),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('apimPolicy.allowedTypes')) vscode.workspace.textDocuments.forEach((d) => schedule(d, 0));
     }),
     { dispose: () => timers.forEach(clearTimeout) },
   );
-}
-
-/** At most this many hover requests per pass, to bound the cost on huge policies. */
-const HOVER_BUDGET = 300;
-
-async function semanticFindings(synced: SyncedShadow, allow: Allowlist, suspicious: Set<string>, token: vscode.CancellationToken): Promise<Finding[]> {
-  const uri = synced.csDoc.uri;
-  const legend = await vscode.commands.executeCommand<vscode.SemanticTokensLegend>('vscode.provideDocumentSemanticTokensLegend', uri);
-  const tokens = await vscode.commands.executeCommand<vscode.SemanticTokens>('vscode.provideDocumentSemanticTokens', uri);
-  if (!legend || !tokens) return [];
-  const out: Finding[] = [];
-  const hoverCache = new Map<string, string>();
-  let budget = HOVER_BUDGET;
-  for (const t of decodeSemanticTokens(tokens.data, legend.tokenTypes)) {
-    const start = synced.index.offsetAt({ line: t.line, character: t.character });
-    if (!methodAt(synced.shadow, start)) continue;
-    const name = synced.shadow.text.slice(start, start + t.length);
-    const isType = TYPE_TOKENS.has(t.type);
-    if (!isType && !(MEMBER_TOKENS.has(t.type) && suspicious.has(name))) continue;
-    if (budget-- <= 0 || token.isCancellationRequested) break;
-    const hover = await hoverText(uri, synced.csDoc.positionAt(start), hoverCache, `${t.type}:${name}:${isType ? '' : start}`);
-    const sym = parseHoverSymbol(hover);
-    const range = synced.shadow.map.rangeToSource({ start, end: start + t.length });
-    if (!sym || !range) continue;
-    if (sym.kind === 'type' && sym.fullName.includes('.') && !allow.isFullNameAllowed(sym.fullName)) {
-      out.push({ range, code: 'disallowed-type', message: `'${sym.fullName}' isn't on the APIM policy expression allowlist.` });
-    } else if (sym.kind === 'member') {
-      const type = allow.restrictedByShortName(sym.typeName.split('.').pop()!);
-      const allowed = type && allow.memberProblem(type, sym.member);
-      if (allowed) {
-        const list = allowed.filter((m) => m !== '(Constructor)');
-        out.push({ range, code: 'disallowed-member', message: `APIM doesn't allow '${sym.typeName}.${sym.member}'.${list.length ? ` Allowed: ${list.slice(0, 8).join(', ')}${list.length > 8 ? ', …' : ''}.` : ''}` });
-      }
-    }
-  }
-  return out;
-}
-
-async function hoverText(uri: vscode.Uri, pos: vscode.Position, cache: Map<string, string>, key: string): Promise<string> {
-  const hit = cache.get(key);
-  if (hit !== undefined) return hit;
-  const hovers = await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', uri, pos);
-  const text = (hovers ?? []).flatMap((h) => h.contents).map((c) => (typeof c === 'string' ? c : 'value' in c ? c.value : '')).join('\n');
-  cache.set(key, text);
-  return text;
 }

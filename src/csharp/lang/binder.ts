@@ -8,24 +8,33 @@
  * anything: gaps in the model never turn into errors, they just stop inference.
  */
 
+import { isJArray, isJObject, literalKey, NO_SHAPES, shapeOf, tokenShape, withShape, type JsonShape, type ShapeEnv } from './json';
 import { PREDEFINED_TYPES } from './lexer';
 import { byName, mentions, NULL, sameType, substitute, UNKNOWN, type MemberDef, type Subst, type Type, type TypeDef, type TypeModel } from './model';
 import type { Parsed } from './parser';
-import type { Argument, ArgumentList, Block, Expr, Span, Stmt, TypeNode } from './syntax';
+import type { Argument, ArgumentList, Block, Expr, FromClause, LocalFunction, QueryBody, Span, Stmt, TypeNode } from './syntax';
+import type { TypeRef } from './model';
 
 export interface Local {
   name: string;
   type: Type;
   /** Declaration span; undefined for `context`. */
   decl?: Span;
-  kind: 'local' | 'parameter' | 'context';
+  kind: 'local' | 'parameter' | 'context' | 'function' | 'range';
+  /** A local function's signature. */
+  fn?: MemberDef;
 }
+
+/** Declaring type for local functions, which have no real one. */
+const LOCAL_FUNCTIONS: TypeDef = { key: '<local>', name: '<local>', namespace: '', kind: 'class', typeParams: [], variance: [], isStatic: true, isAbstract: false, interfaces: [], members: [], origin: 'stub' };
 
 export type BoundSymbol =
   | { kind: 'local'; local: Local }
   | { kind: 'member'; member: MemberDef; subst: Subst; receiver?: Type }
   | { kind: 'type'; type: Type }
-  | { kind: 'namespace'; name: string };
+  | { kind: 'namespace'; name: string }
+  /** A key of a JSON object with a known shape: `o["someData"]`, with its `@property` description. */
+  | { kind: 'jsonKey'; name: string; type: Type; doc?: string };
 
 /** What an expression binds to. */
 export type Value =
@@ -47,7 +56,9 @@ export type CompletionSite =
   /** A simple name: locals, types, namespaces and keywords. `typeOnly` after `new`, `is` and the like. */
   | { kind: 'name'; locals: Local[]; span: Span; typeOnly: boolean; expected?: Type }
   /** A member name in an object initializer. */
-  | { kind: 'initializer'; type: Type; span: Span; assigned: string[] };
+  | { kind: 'initializer'; type: Type; span: Span; assigned: string[] }
+  /** Inside the string key of `o["…"]`, where `o` has a known shape. */
+  | { kind: 'jsonKey'; shape: JsonShape & { kind: 'object' }; span: Span };
 
 export interface HoverSite {
   span: Span;
@@ -75,6 +86,11 @@ export interface Reference {
 
 export interface BindDiagnostic extends Span {
   message: string;
+  /**
+   * `language-version`: valid C# newer than the 7.3 policy expressions accept.
+   * `json-shape`: JSON built differently from the shape it's meant to have (a warning).
+   */
+  code?: 'language-version' | 'json-shape';
 }
 
 export interface BindResult {
@@ -86,6 +102,8 @@ export interface BindResult {
   references: Reference[];
   /** Type of the top-level expression (`@(...)`), or of the first `return` in a block. */
   resultType: Type;
+  /** The innermost `new JObject` whose `new JObject` text holds the probe, with what it builds. */
+  created?: { span: Span; type: Type };
 }
 
 interface ArgInfo {
@@ -116,15 +134,33 @@ export class Binder {
   private readonly scopes: Map<string, Local>[] = [];
   /** Return types seen by the innermost lambda (or the top-level block). */
   private readonly returns: Type[][] = [];
+  /** Declared return type of the innermost local function, or undefined for lambdas and the top level. */
+  private readonly returnTargets: (Type | undefined)[] = [];
+  /** Type parameters of the local functions being bound. */
+  private readonly typeParamScopes: Set<string>[] = [];
   private speculative = 0;
   private completion?: CompletionSite;
   private hover?: HoverSite;
   private signature?: SignatureSite;
+  private created?: { span: Span; type: Type };
+  /** The receiver type of each `x[…]` bound, so an assignment to it can add a key to x's shape. */
+  private readonly indexReceivers = new WeakMap<Expr, Type>();
+  /** The JSON shape a `new JObject` / `new JArray` is meant to have, from where its value goes. */
+  private readonly wanted = new WeakMap<Expr, Type>();
 
   constructor(
     private readonly model: TypeModel,
     /** Offset completion, hover and signature help ask about. */
     private readonly probe = -1,
+    /** What the policy needs the expression to produce, when it's known (a `condition` is bool). */
+    private readonly expected?: Type,
+    /** Shapes of the context variables, for `context.Variables["x"]`. */
+    private readonly shapes: ShapeEnv = NO_SHAPES,
+    /**
+     * The JSON shape the expression's value should have: a `set-variable` whose variable has a
+     * declared type. The JObjects and JArrays it builds are checked against it.
+     */
+    private readonly wantedShape?: Type,
   ) {}
 
   bind(parsed: Parsed): BindResult {
@@ -132,13 +168,20 @@ export class Binder {
     this.scopes.push(new Map([['context', { name: 'context', type: context, kind: 'context' }]]));
     let resultType: Type = UNKNOWN;
     if (parsed.kind === 'expr') {
-      resultType = this.typeOf(this.expr(parsed.root));
+      if (this.wantedShape) this.want(parsed.root, this.wantedShape);
+      const v = this.expr(parsed.root, this.expected);
+      if (this.expected) this.checkConversion(parsed.root, v, this.expected);
+      resultType = this.typeOf(v);
     } else {
       this.returns.push([]);
+      this.returnTargets.push(this.expected);
       this.block(parsed.root, false);
+      this.returnTargets.pop();
       resultType = this.returns.pop()!.find((t) => t.k !== 'null' && t.k !== 'unknown') ?? UNKNOWN;
+      // APIM requires every path through a block to end in a return.
+      if (endReachable(parsed.root)) this.error({ start: parsed.root.end, end: parsed.root.end }, 'Not all code paths return a value. Every path through a policy expression block must end in a return.');
     }
-    return { diagnostics: this.diagnostics, completion: this.completion, hover: this.hover, signature: this.signature, references: this.references, resultType };
+    return { diagnostics: this.diagnostics, completion: this.completion, hover: this.hover, signature: this.signature, references: this.references, resultType, created: this.created };
   }
 
   // ---- recording ------------------------------------------------------------------------------
@@ -147,10 +190,10 @@ export class Binder {
     return this.speculative === 0;
   }
 
-  private error(span: Span, message: string): void {
+  private error(span: Span, message: string, code?: BindDiagnostic['code']): void {
     if (!this.recording) return;
     if (this.diagnostics.some((d) => d.start === span.start && d.end === span.end)) return;
-    this.diagnostics.push({ start: span.start, end: span.end, message });
+    this.diagnostics.push({ start: span.start, end: span.end, message, code });
   }
 
   private hits(span: Span): boolean {
@@ -219,6 +262,8 @@ export class Binder {
 
   private block(b: Block, scoped = true): void {
     const run = () => {
+      // Local functions can be called anywhere in their block, so declare them first.
+      for (const s of b.statements) if (s.kind === 'localFunction') this.declareLocalFunction(s);
       for (const s of b.statements) this.stmt(s);
     };
     if (scoped) this.withScope(run);
@@ -233,12 +278,15 @@ export class Binder {
       case 'break':
       case 'continue':
         return;
+      case 'localFunction':
+        return this.localFunctionBody(s);
       case 'local': {
         const declared = s.type.kind === 'var' ? undefined : this.resolveType(s.type, false);
         for (const d of s.declarators) {
           let type = declared ?? UNKNOWN;
           if (d.init) {
             const v = d.init.kind === 'arrayInit' && declared ? this.arrayInit(d.init, declared) : this.expr(d.init, declared);
+            if (declared && d.init.kind !== 'arrayInit') this.checkConversion(d.init, v, declared);
             if (!declared) {
               type = this.typeOf(v);
               if (type.k === 'null') this.error(d.nameSpan, "Cannot assign null to an implicitly-typed variable.");
@@ -256,7 +304,7 @@ export class Binder {
         return;
       case 'if':
         // Variables declared in an if condition stay in scope after the if (C# 7.3).
-        this.expr(s.condition, this.model.named('System.Boolean'));
+        this.condition(s.condition);
         this.withScope(() => this.stmt(s.then));
         if (s.else) {
           const otherwise = s.else;
@@ -264,7 +312,17 @@ export class Binder {
         }
         return;
       case 'return': {
-        const t = s.value ? this.typeOf(this.expr(s.value)) : this.model.named('System.Void');
+        const target = this.returnTargets[this.returnTargets.length - 1];
+        const isVoid = target?.k === 'named' && target.def.key === 'System.Void';
+        // A top-level return in a block is the value the shape is wanted for.
+        if (s.value && this.wantedShape && this.returns.length === 1) this.want(s.value, this.wantedShape);
+        const v = s.value ? this.expr(s.value, target && !isVoid ? target : undefined) : undefined;
+        const t = v ? this.typeOf(v) : this.model.named('System.Void');
+        if (target && target.k !== 'unknown') {
+          if (isVoid && s.value) this.error(s.value, 'This local function returns void, so return must not be followed by a value.');
+          else if (!isVoid && !s.value) this.error(s, `A value convertible to '${this.model.display(target)}' is required.`);
+          else if (s.value && v) this.checkConversion(s.value, v, target);
+        }
         this.returns[this.returns.length - 1]?.push(t);
         return;
       }
@@ -274,7 +332,7 @@ export class Binder {
       case 'foreach':
         this.withScope(() => {
           const coll = this.typeOf(this.expr(s.collection));
-          const element = this.model.elementType(coll);
+          const element = this.elementOf(coll);
           const type = s.type.kind === 'var' ? element : this.resolveType(s.type);
           this.declare({ name: s.designation.name, type, decl: s.designation, kind: 'local' });
           this.stmt(s.body);
@@ -283,20 +341,20 @@ export class Binder {
       case 'for':
         this.withScope(() => {
           for (const i of s.init) this.stmt(i);
-          if (s.condition) this.expr(s.condition, this.model.named('System.Boolean'));
+          if (s.condition) this.condition(s.condition);
           for (const i of s.iterators) this.expr(i);
           this.stmt(s.body);
         });
         return;
       case 'while':
         this.withScope(() => {
-          this.expr(s.condition, this.model.named('System.Boolean'));
+          this.condition(s.condition);
           this.stmt(s.body);
         });
         return;
       case 'do':
         this.withScope(() => this.stmt(s.body));
-        this.withScope(() => this.expr(s.condition, this.model.named('System.Boolean')));
+        this.withScope(() => this.condition(s.condition));
         return;
       case 'switch': {
         const t = this.typeOf(this.expr(s.value));
@@ -322,7 +380,7 @@ export class Binder {
           this.withScope(() => {
             const type = c.type ? this.resolveType(c.type) : this.model.named('System.Exception');
             if (c.designation) this.declare({ name: c.designation.name, type, decl: c.designation, kind: 'local' });
-            if (c.filter) this.expr(c.filter, this.model.named('System.Boolean'));
+            if (c.filter) this.condition(c.filter);
             this.block(c.block);
           });
         }
@@ -339,6 +397,150 @@ export class Binder {
         this.stmt(s.body);
         return;
     }
+  }
+
+  /** Binds a condition, which must convert to bool. */
+  private condition(e: Expr): void {
+    const bool = this.model.named('System.Boolean');
+    this.checkConversion(e, this.expr(e, bool), bool);
+  }
+
+  // ---- local functions ------------------------------------------------------------------------
+
+  private declareLocalFunction(f: LocalFunction): void {
+    const m = this.model;
+    const typeParams = f.typeParams.map((p) => p.name);
+    this.typeParamScopes.push(new Set(typeParams));
+    const ret = this.resolveType(f.returnType);
+    const params = f.params.map((p) => ({
+      name: p.name,
+      type: toRef(p.type ? this.resolveType(p.type) : UNKNOWN),
+      modifier: p.isParams ? ('params' as const) : p.modifier,
+      defaultText: p.defaultValue ? defaultText(p.defaultValue) : undefined,
+    }));
+    this.typeParamScopes.pop();
+    const fn: MemberDef = { name: f.name, kind: 'method', isStatic: true, isExtension: false, typeParams, type: toRef(ret), params, declaring: LOCAL_FUNCTIONS };
+    const local: Local = { name: f.name, type: m.named('System.Delegate'), decl: f.nameSpan, kind: 'function', fn };
+    if (this.lookupLocal(f.name)?.kind === 'local') this.error(f.nameSpan, `A local variable named '${f.name}' is already defined in this scope.`);
+    this.scopes[this.scopes.length - 1].set(f.name, local);
+    this.recordHover(f.nameSpan, { kind: 'local', local });
+  }
+
+  private localFunctionBody(f: LocalFunction): void {
+    const local = this.lookupLocal(f.name);
+    const fn = local?.kind === 'function' ? local.fn : undefined;
+    if (!fn) return;
+    this.typeParamScopes.push(new Set(fn.typeParams));
+    const ret = this.model.resolve(fn.type);
+    // Re-resolve types so hover and completion inside the signature work.
+    this.resolveType(f.returnType);
+    this.withScope(() => {
+      f.params.forEach((p, i) => {
+        if (p.type) this.resolveType(p.type);
+        if (p.defaultValue) this.expr(p.defaultValue);
+        const type = this.model.resolve(fn.params[i].type);
+        this.declare({ name: p.name, type, decl: { start: p.end - p.name.length, end: p.end }, kind: 'parameter' });
+      });
+      const isVoid = ret.k === 'named' && ret.def.key === 'System.Void';
+      if (f.body.kind === 'block') {
+        this.returns.push([]);
+        this.returnTargets.push(ret);
+        this.block(f.body, false);
+        this.returnTargets.pop();
+        this.returns.pop();
+        if (!isVoid && ret.k !== 'unknown' && endReachable(f.body)) this.error(f.nameSpan, `Not all code paths in '${f.name}' return a value.`);
+      } else {
+        const v = this.expr(f.body, isVoid ? undefined : ret);
+        if (!isVoid) this.checkConversion(f.body, v, ret);
+      }
+    });
+    this.typeParamScopes.pop();
+  }
+
+  // ---- query expressions ----------------------------------------------------------------------
+
+  /** `from x in xs ... select y` is IEnumerable<typeof y>; range variables are typed from their sources. */
+  private query(e: Expr & { kind: 'query' }): Value {
+    return this.withScope(() => {
+      this.fromClause(e.from);
+      return this.val(this.queryBody(e.body));
+    });
+  }
+
+  private fromClause(c: FromClause): void {
+    const source = this.typeOf(this.expr(c.source));
+    const type = c.type ? this.resolveType(c.type) : this.model.elementType(source);
+    this.declare({ name: c.designation.name, type, decl: c.designation, kind: 'range' });
+  }
+
+  private queryBody(b: QueryBody): Type {
+    const m = this.model;
+    const sequence = (t: Type) => (t.k === 'unknown' ? UNKNOWN : m.named('System.Collections.Generic.IEnumerable`1', [t]));
+    for (const c of b.clauses) {
+      switch (c.kind) {
+        case 'from':
+          this.fromClause(c);
+          break;
+        case 'let':
+          this.declare({ name: c.designation.name, type: this.typeOf(this.expr(c.value)), decl: c.designation, kind: 'range' });
+          break;
+        case 'where':
+          this.condition(c.condition);
+          break;
+        case 'join': {
+          const source = this.typeOf(this.expr(c.source));
+          const type = c.type ? this.resolveType(c.type) : m.elementType(source);
+          this.expr(c.outerKey);
+          this.withScope(() => {
+            this.declare({ name: c.designation.name, type, decl: c.designation, kind: 'range' });
+            this.expr(c.innerKey);
+          });
+          if (c.into) this.declare({ name: c.into.name, type: sequence(type), decl: c.into, kind: 'range' });
+          else this.declare({ name: c.designation.name, type, decl: c.designation, kind: 'range' });
+          break;
+        }
+        case 'orderby':
+          for (const k of c.keys) this.expr(k);
+          break;
+      }
+    }
+    let element: Type = UNKNOWN;
+    if (b.final?.kind === 'select') {
+      element = this.typeOf(this.expr(b.final.value));
+    } else if (b.final?.kind === 'group') {
+      const value = this.typeOf(this.expr(b.final.value));
+      const key = this.typeOf(this.expr(b.final.key));
+      element = m.named('System.Linq.IGrouping`2', [key, value]);
+    }
+    if (b.continuation) {
+      const cont = b.continuation;
+      return this.withScope(() => {
+        this.declare({ name: cont.designation.name, type: element, decl: cont.designation, kind: 'range' });
+        return this.queryBody(cont.body);
+      });
+    }
+    return sequence(element);
+  }
+
+  // ---- conversions ----------------------------------------------------------------------------
+
+  /**
+   * Reports that `e` (bound to `v`) has no implicit conversion to `target`. Only reported when
+   * both types are fully known to the model, so a gap in the model can't produce an error.
+   */
+  private checkConversion(e: Expr, v: Value, target: Type): void {
+    if (!this.recording || v.kind !== 'value') return;
+    const m = this.model;
+    const from = v.type;
+    if (e.kind === 'lambda' || e.kind === 'interp' || e.kind === 'default' || e.kind === 'throw' || e.kind === 'missing') return;
+    if (!m.isDefinite(from) || !m.isDefinite(target)) return;
+    if (m.conversion(from, target, constantKind(e, v)) !== undefined) return;
+    if (from.k === 'null') {
+      this.error(e, `Cannot convert null to '${m.display(target)}' because it's a non-nullable value type.`);
+      return;
+    }
+    const hint = m.explicitConversion(from, target) ? ' An explicit conversion exists (are you missing a cast?)' : '';
+    this.error(e, `Cannot implicitly convert type '${m.display(from)}' to '${m.display(target)}'.${hint}`);
   }
 
   // ---- types ----------------------------------------------------------------------------------
@@ -362,8 +564,14 @@ export class Binder {
         for (let i = node.ranks.length - 1; i >= 0; i--) t = { k: 'array', element: t, rank: node.ranks[i] };
         return t;
       }
-      case 'nullable':
-        return this.model.nullableOf(this.resolveType(node.element));
+      case 'nullable': {
+        const element = this.resolveType(node.element);
+        if (this.model.isReferenceType(element)) {
+          this.error(node, 'Nullable reference types need C# 8. Policy expressions are C# 7.3.', 'language-version');
+          return element;
+        }
+        return this.model.nullableOf(element);
+      }
       case 'tuple':
         return { k: 'tuple', elements: node.elements.map((e) => ({ name: e.name, type: this.resolveType(e.type) })) };
       case 'named': {
@@ -373,6 +581,7 @@ export class Binder {
           const args = part.typeArgs?.map((a) => this.resolveType(a)) ?? [];
           if (i === 0) {
             if (this.hits(part)) this.recordCompletion({ kind: 'name', locals: typeOnly ? [] : this.visibleLocals(), span: part, typeOnly });
+            if (node.parts.length === 1 && !args.length && this.typeParamScopes.some((s) => s.has(part.name))) return { k: 'param', name: part.name };
             current = this.simpleTypeOrNamespace(part.name, args, part, node.global);
           } else {
             if (this.hits(part) && current) this.recordCompletion({ kind: 'member', receiver: current, span: part, conditional: false });
@@ -465,7 +674,9 @@ export class Binder {
         for (const h of e.holes) this.expr(h);
         return this.val(m.named('System.String'));
       case 'namedValue':
-        return this.val(m.named('System.String'));
+        // Outside a string, APIM pastes the named value's text in before compiling, so it can be
+        // a number, a bool or code. Its type isn't known until then.
+        return this.val(UNKNOWN);
       case 'name':
         return this.name(e);
       case 'predefined': {
@@ -498,11 +709,19 @@ export class Binder {
         } else if (left.kind === 'value' && left.symbol?.kind === 'member' && left.symbol.member.kind === 'property' && !left.symbol.member.writable && left.symbol.member.declaring.origin === 'stub') {
           this.error(e.left, `Property '${left.symbol.member.name}' is read-only.`);
         }
-        this.expr(e.right, e.op === '=' ? lt : undefined);
+        const right = this.expr(e.right, e.op === '=' ? lt : undefined);
+        if (e.op === '=' && left.kind === 'value') this.checkConversion(e.right, right, lt);
+        // `o["k"] = v` adds k to o's shape.
+        if (e.op === '=' && e.left.kind === 'index') this.addKey(this.indexReceivers.get(e.left), e.left.args.args, this.typeOf(right));
         return this.val(lt);
       }
       case 'conditional': {
-        this.expr(e.condition, m.named('System.Boolean'));
+        const w = this.wanted.get(e);
+        if (w) {
+          this.want(e.whenTrue, w);
+          this.want(e.whenFalse, w);
+        }
+        this.condition(e.condition);
         const a = this.typeOf(this.expr(e.whenTrue, expected));
         const b = this.typeOf(this.expr(e.whenFalse, expected));
         return this.val(this.commonType(a, b, e.whenTrue, e.whenFalse));
@@ -517,18 +736,22 @@ export class Binder {
         return this.val(m.named('System.Boolean'));
       }
       case 'as': {
-        this.expr(e.operand);
+        const operand = this.typeOf(this.expr(e.operand));
         const t = this.resolveType(e.type);
         if (m.isValueType(t) && !m.isNullable(t)) this.error(e.type, `The as operator must be used with a reference type or nullable type ('${m.display(t)}' is a non-nullable value type).`);
-        return this.val(t);
+        return this.val(withShape(t, shapeOf(operand)));
       }
       case 'cast': {
         const t = this.resolveType(e.type);
-        this.expr(e.operand, t);
-        return this.val(t);
+        // `(JObject)context.Variables["x"]` keeps what's known about x.
+        const operand = this.typeOf(this.expr(e.operand, t));
+        return this.val(withShape(t, shapeOf(operand)));
       }
-      case 'paren':
+      case 'paren': {
+        const w = this.wanted.get(e);
+        if (w) this.want(e.inner, w);
         return this.expr(e.inner, expected);
+      }
       case 'tuple':
         return this.val({ k: 'tuple', elements: e.items.map((i) => ({ name: i.name, type: this.typeOf(this.expr(i.value)) })) });
       case 'typeof':
@@ -553,6 +776,8 @@ export class Binder {
       case 'arrayInit':
         for (const i of e.items) this.expr(i);
         return this.val(UNKNOWN);
+      case 'query':
+        return this.query(e);
     }
   }
 
@@ -595,7 +820,13 @@ export class Binder {
       const rest = e.name.slice(8);
       return this.simpleTypeOrNamespace(rest, [], e, true) ?? this.val(UNKNOWN);
     }
-    const local = e.typeArgs ? undefined : this.lookupLocal(e.name);
+    const found = this.lookupLocal(e.name);
+    if (found?.kind === 'function' && found.fn) {
+      this.recordHover(e, { kind: 'local', local: found });
+      const typeArgs = e.typeArgs?.map((a) => this.resolveType(a));
+      return { kind: 'methods', name: e.name, candidates: [{ member: found.fn, subst: new Map() }], typeArgs, extensionsOnly: false };
+    }
+    const local = e.typeArgs ? undefined : found;
     if (local) {
       const symbol: BoundSymbol = { kind: 'local', local };
       this.recordHover(e, symbol);
@@ -617,7 +848,8 @@ export class Binder {
     return this.val(UNKNOWN);
   }
 
-  private member(e: Expr & { kind: 'member' }): Value {
+  /** `invoked` when it's the target of a call: then only methods and delegate-typed members count. */
+  private member(e: Expr & { kind: 'member' }, invoked = false): Value {
     const target = this.expr(e.target);
     const site = { start: e.nameSpan.start, end: e.nameSpan.end };
     if (this.hits(site)) this.recordCompletion({ kind: 'member', receiver: target, span: site, conditional: e.conditional });
@@ -661,7 +893,13 @@ export class Binder {
       const idx = receiver.elements.findIndex((el, i) => el.name === e.name || `Item${i + 1}` === e.name);
       if (idx >= 0) return this.val(receiver.elements[idx].type);
     }
-    const valueMember = found.find((x) => x.member.kind !== 'method');
+    let valueMember = found.find((x) => x.member.kind !== 'method');
+    // `users.Count(f)` on a JArray: the Count property isn't invocable, so the lookup goes on to
+    // methods and extension methods, and only falls back to it when there are none.
+    if (valueMember && invoked && !isStatic && !m.delegateSignature(m.resolve(valueMember.member.type, valueMember.subst))) {
+      const hasMethods = found.some((x) => x.member.kind === 'method') || this.extensionsFor(receiver, e.name).length > 0;
+      if (hasMethods) valueMember = undefined;
+    }
     if (valueMember) {
       const { member, subst } = valueMember;
       if (member.isStatic !== isStatic) {
@@ -713,13 +951,14 @@ export class Binder {
   }
 
   private call(e: Expr & { kind: 'call' }): Value {
-    const callee = this.expr(e.target);
+    const callee = e.target.kind === 'member' ? this.member(e.target, true) : this.expr(e.target);
     const m = this.model;
     if (callee.kind === 'methods') {
       const r = this.resolveCall(callee.candidates, e.args, callee.receiver, callee.typeArgs, callee.name, e.target.kind === 'member' ? e.target.nameSpan : e.target);
       if (!r) return this.val(UNKNOWN);
-      const ret = m.resolve(r.candidate.member.type, r.subst);
+      let ret = m.resolve(r.candidate.member.type, r.subst);
       const target = e.target;
+      ret = this.shapeCall(e, callee.name, callee.receiver, ret);
       if (target.kind === 'member') {
         const symbol: BoundSymbol = { kind: 'member', member: r.candidate.member, subst: r.subst, receiver: callee.receiver };
         this.reference(target.nameSpan, r.candidate.member.declaring, r.candidate.member);
@@ -740,11 +979,68 @@ export class Binder {
     return this.val(UNKNOWN);
   }
 
+  /** What a call's result holds, when shapes say: `Variables.GetValueOrDefault<JObject>("x")`, `OfType<JObject>()`. */
+  private shapeCall(e: Expr & { kind: 'call' }, name: string, receiver: Type | undefined, ret: Type): Type {
+    if (name === 'GetValueOrDefault' && isVariables(e.target.kind === 'member' ? e.target.target : undefined)) {
+      const first = e.args.args[0]?.value;
+      const key = first?.kind === 'literal' ? literalKey(first.text) : undefined;
+      return key ? withShape(ret, this.shapes.get(key)) : ret;
+    }
+    if ((name === 'OfType' || name === 'Cast') && receiver && ret.k === 'named' && ret.args.length === 1) {
+      const element = shapeOf(this.elementOf(receiver));
+      if (element) return { ...ret, args: [withShape(ret.args[0], element)] };
+    }
+    return ret;
+  }
+
+  /** What iterating `t` gives: a shaped JArray's elements carry their shape. */
+  private elementOf(t: Type): Type {
+    const s = shapeOf(t);
+    const element = this.model.elementType(t);
+    if (s?.kind === 'array') return withShape(element, tokenShape(s.element));
+    return element;
+  }
+
+  /** Records `key = value` in `receiver`'s object shape (an initializer entry or an assignment). */
+  private addKey(receiver: Type | undefined, args: readonly Argument[], value: Type): void {
+    const shape = receiver && shapeOf(receiver);
+    const key = args.length === 1 && args[0].value.kind === 'literal' ? literalKey(args[0].value.text) : undefined;
+    if (shape?.kind !== 'object' || key === undefined) return;
+    shape.fields.set(key, value.k === 'null' ? (shape.fields.get(key) ?? UNKNOWN) : value);
+  }
+
   private index(e: Expr & { kind: 'index' }): Value {
     const target = this.expr(e.target);
     const m = this.model;
     let t = this.typeOf(target);
     if (e.conditional) t = m.underlying(t);
+    this.indexReceivers.set(e, t);
+    // `context.Variables["x"]` is an object, carrying what's known about x.
+    if (isVariables(e.target)) {
+      const v = this.indexValue(e, t, m);
+      const key = e.args.args[0]?.value;
+      const name = key?.kind === 'literal' ? literalKey(key.text) : undefined;
+      return v.kind === 'value' && name ? this.val(withShape(v.type, this.shapes.get(name)), v.symbol) : v;
+    }
+    const v = this.indexValue(e, t, m);
+    const shape = shapeOf(t);
+    const arg = e.args.args.length === 1 ? e.args.args[0].value : undefined;
+    if (shape?.kind === 'object' && arg?.kind === 'literal' && arg.literal === 'string') {
+      const inner = { start: arg.start + 1, end: Math.max(arg.start + 1, arg.end - 1) };
+      if (this.hits(inner)) this.recordCompletion({ kind: 'jsonKey', shape, span: inner });
+      const key = literalKey(arg.text);
+      const field = key === undefined ? undefined : shape.fields.get(key);
+      if (key !== undefined && field) {
+        this.recordHover(inner, { kind: 'jsonKey', name: key, type: field, doc: shape.docs?.get(key) });
+        return v.kind === 'value' ? this.val(withShape(v.type, tokenShape(field)), v.symbol) : v;
+      }
+      return v;
+    }
+    if (shape?.kind === 'array' && v.kind === 'value') return this.val(withShape(v.type, tokenShape(shape.element)), v.symbol);
+    return v;
+  }
+
+  private indexValue(e: Expr & { kind: 'index' }, t: Type, m: TypeModel): Value {
     const lift = (r: Type) => (e.conditional && m.isValueType(r) ? m.nullableOf(r) : r);
     if (t.k === 'array') {
       for (const a of e.args.args) this.expr(a.value, m.named('System.Int32'));
@@ -786,7 +1082,15 @@ export class Binder {
       }
       return this.val({ k: 'array', element, rank: e.arrayRanks[0] });
     }
-    const type = e.type ? this.resolveType(e.type) : (expected ?? UNKNOWN);
+    let type = e.type ? this.resolveType(e.type) : (expected ?? UNKNOWN);
+    // A new JObject starts with no keys; its initializer and later assignments add them.
+    if (isJObject(type)) type = withShape(type, { kind: 'object', fields: new Map() });
+    // What it's meant to hold: a JArray's items are each meant to be the wanted element.
+    const wanted = shapeOf(this.wanted.get(e) ?? UNKNOWN);
+    if (wanted?.kind === 'array' && isJArray(type)) {
+      for (const a of e.args?.args ?? []) this.want(a.value, wanted.element);
+      if (e.init?.kind === 'collection') for (const member of e.init.members) this.want(member.value, wanted.element);
+    }
     if (type.k !== 'named') {
       if (e.args) for (const a of e.args.args) this.expr(a.value);
       if (e.init) this.initializer(e.init, type);
@@ -814,11 +1118,62 @@ export class Binder {
       for (const a of e.args.args) this.expr(a.value);
       if (e.args.args.length > 0 && type.def.kind !== 'struct' && type.def.kind !== 'delegate') this.error(e.type ?? e, `'${m.display(type)}' does not have a constructor that takes ${e.args.args.length} arguments.`);
     }
-    if (e.init) this.initializer(e.init, type);
+    // `new JArray(items)` holds what items yields; `new JArray { a, b }` what a holds.
+    if (isJArray(type)) {
+      const first = e.args?.args[0]?.value ?? (e.init?.kind === 'collection' ? e.init.members[0]?.value : undefined);
+      if (first) {
+        const t = this.speculate(() => this.typeOf(this.expr(first)));
+        // One argument that's a sequence (not itself a token) gives the elements; anything else is one.
+        const token = t.k === 'named' && t.def.key.startsWith('Newtonsoft.Json.Linq.') && shapeOf(t)?.kind !== 'array';
+        const sequence = e.args?.args.length === 1 && !token && t.k !== 'unknown' && m.elementType(t).k !== 'unknown' && !(t.k === 'named' && t.def.key === 'System.String');
+        const element = sequence ? this.elementOf(t) : t;
+        if (element.k !== 'unknown') type = withShape(type, { kind: 'array', element });
+      }
+    }
+    if (e.init) this.initializer(e.init, type, wanted?.kind === 'object' && isJObject(type) ? wanted : undefined);
+    if (wanted?.kind === 'object' && isJObject(type)) this.checkObject(e, type, wanted);
+    // `new JObject` under the probe: what it builds, for turning it into a @typedef. Innermost wins.
+    const head = { start: e.start, end: e.type?.end ?? e.start + 3 };
+    if (isJObject(type) && this.recording && this.hits(head)) this.created = { span: { start: e.start, end: e.end }, type };
     return this.val(type);
   }
 
-  private initializer(init: NonNullable<(Expr & { kind: 'new' })['init']>, type: Type): void {
+  /** Marks `e` as meant to produce `t` (a shaped JSON type), for the JObject or JArray it builds. */
+  private want(e: Expr, t: Type): void {
+    if (shapeOf(t)) this.wanted.set(e, t);
+  }
+
+  /**
+   * Compares the JObject `e` built with the shape it's meant to have: keys the shape doesn't
+   * have, required keys it lacks, and values of the wrong kind. Warnings, since the gateway
+   * accepts any JSON; they say the value won't be what the fragment reading it expects.
+   */
+  private checkObject(e: Expr & { kind: 'new' }, built: Type, wanted: JsonShape & { kind: 'object' }): void {
+    const m = this.model;
+    const have = shapeOf(built);
+    if (have?.kind !== 'object') return;
+    const keys = new Map<string, { key: Span; value: Expr }>();
+    for (const member of e.init?.members ?? []) {
+      const arg = member.index?.args.length === 1 ? member.index.args[0].value : undefined;
+      const key = arg?.kind === 'literal' ? literalKey(arg.text) : undefined;
+      if (arg && key !== undefined) keys.set(key, { key: arg, value: member.value });
+    }
+    const known = [...wanted.fields.keys()].map((k) => `${k}${wanted.optional?.has(k) ? '?' : ''}`).join(', ');
+    for (const [key, at] of keys) {
+      const want = wanted.fields.get(key);
+      if (!want) {
+        this.error(at.key, `'${key}' isn't a key of the shape this value should have (${known || 'no keys'}).`, 'json-shape');
+        continue;
+      }
+      const got = have.fields.get(key);
+      const problem = got && mismatch(m, got, want);
+      if (problem) this.error(at.value, `'${key}' should be ${problem}.`, 'json-shape');
+    }
+    const missing = [...wanted.fields.keys()].filter((k) => !wanted.optional?.has(k) && !have.fields.has(k));
+    if (missing.length) this.error(e.type ?? e, `Missing ${missing.length === 1 ? 'required key' : 'required keys'} ${missing.map((k) => `'${k}'`).join(', ')}.`, 'json-shape');
+  }
+
+  private initializer(init: NonNullable<(Expr & { kind: 'new' })['init']>, type: Type, wanted?: JsonShape & { kind: 'object' }): void {
     const m = this.model;
     const assigned = init.members.filter((x) => x.name).map((x) => x.name!);
     for (const member of init.members) {
@@ -830,11 +1185,32 @@ export class Binder {
           this.recordHover(member.nameSpan, { kind: 'member', member: found.member, subst: found.subst, receiver: type }, ft);
           this.reference(member.nameSpan, found.member.declaring, found.member);
           if (member.value.kind === 'arrayInit') this.arrayInit(member.value, ft);
-          else this.expr(member.value, ft);
+          else this.checkConversion(member.value, this.expr(member.value, ft), ft);
         } else {
           if (type.k === 'named') this.error(member.nameSpan, `'${m.display(type)}' does not contain a definition for '${member.name}'.`);
           this.expr(member.value);
         }
+      } else if (member.index) {
+        // [key] = value: an indexer assignment; on a JObject, it adds the key to the shape.
+        const arg = member.index.args.length === 1 ? member.index.args[0].value : undefined;
+        if (wanted && arg?.kind === 'literal' && arg.literal === 'string') {
+          const inner = { start: arg.start + 1, end: Math.max(arg.start + 1, arg.end - 1) };
+          const key = literalKey(arg.text);
+          // Keys still to write, required first: what the shape wants and the code doesn't have yet.
+          if (this.hits(inner)) {
+            const written = new Set(init.members.flatMap((x) => (x !== member && x.index?.args[0]?.value.kind === 'literal' ? [literalKey(x.index.args[0].value.text) ?? ''] : [])));
+            const fields = new Map([...wanted.fields].filter(([k]) => !written.has(k)).sort(([a], [b]) => Number(!!wanted.optional?.has(a)) - Number(!!wanted.optional?.has(b))));
+            this.recordCompletion({ kind: 'jsonKey', shape: { kind: 'object', fields, optional: wanted.optional, docs: wanted.docs }, span: inner });
+          }
+          const field = key === undefined ? undefined : wanted.fields.get(key);
+          if (key !== undefined && field) {
+            this.recordHover(inner, { kind: 'jsonKey', name: key, type: field, doc: wanted.docs?.get(key) });
+            this.want(member.value, field);
+          }
+        }
+        for (const a of member.index.args) this.expr(a.value);
+        const value = this.typeOf(this.expr(member.value));
+        this.addKey(type, member.index.args, value);
       } else if (member.value.kind === 'arrayInit') {
         // { key, value } for Add(key, value)
         for (const i of member.value.items) this.expr(i);
@@ -847,10 +1223,14 @@ export class Binder {
     }
   }
 
-  private arrayInit(e: Expr, declared: Type): Value {
-    if (e.kind !== 'arrayInit') return this.expr(e, declared);
+  private arrayInit(e: Expr, declared: Type, inArray = false): Value {
+    if (e.kind !== 'arrayInit') {
+      const v = this.expr(e, declared);
+      if (inArray) this.checkConversion(e, v, declared);
+      return v;
+    }
     const element = declared.k === 'array' ? declared.element : this.model.elementType(declared);
-    for (const i of e.items) this.arrayInit(i, element);
+    for (const i of e.items) this.arrayInit(i, element, declared.k === 'array');
     return this.val(declared);
   }
 
@@ -862,8 +1242,11 @@ export class Binder {
       });
       if (e.body.kind === 'block') {
         this.returns.push([]);
+        this.returnTargets.push(undefined);
         this.block(e.body, false);
+        this.returnTargets.pop();
         const types = this.returns.pop()!;
+        if (ret && ret.k === 'named' && ret.def.key !== 'System.Void' && endReachable(e.body)) this.error({ start: e.arrow, end: e.arrow + 2 }, 'Not all code paths return a value in this lambda.');
         return types.find((t) => t.k !== 'null' && t.k !== 'unknown') ?? (types.length ? (types[0] ?? UNKNOWN) : this.model.named('System.Void'));
       }
       return this.typeOf(this.expr(e.body, ret && !(ret.k === 'named' && ret.def.key === 'System.Void') ? ret : undefined));
@@ -875,6 +1258,7 @@ export class Binder {
     const t = this.typeOf(this.expr(e.operand));
     switch (e.op) {
       case '!':
+        if (t.k !== 'unknown' && !sameType(m.underlying(t), m.named('System.Boolean')) && m.isDefinite(t) && !m.userOperator(t, 'op_LogicalNot')) this.error(e, `Operator '!' cannot be applied to an operand of type '${m.display(t)}'.`);
         return this.val(m.named('System.Boolean'));
       case '++':
       case '--':
@@ -892,8 +1276,8 @@ export class Binder {
     const m = this.model;
     const bool = m.named('System.Boolean');
     if (e.op === '&&' || e.op === '||') {
-      this.expr(e.left, bool);
-      this.expr(e.right, bool);
+      this.condition(e.left);
+      this.condition(e.right);
       return this.val(bool);
     }
     const lt = this.typeOf(this.expr(e.left));
@@ -994,16 +1378,20 @@ export class Binder {
       if (arg.value.kind === 'lambda') return { arg, lambda: arg.value, type: UNKNOWN };
       if (arg.value.kind === 'declaration') return { arg, outDecl: arg.value, type: UNKNOWN };
       const value = this.expr(arg.value);
-      const literal = arg.value.kind === 'literal' && arg.value.literal === 'int' ? (/^0+$/.test(arg.value.text) ? 'zero' : 'int') : undefined;
+      const literal = constantKind(arg.value, value);
       if (value.kind === 'type') this.error(arg.value, `'${m.display(value.type)}' is a type, which isn't valid here.`);
       return { arg, value, type: this.typeOf(value), literal };
     });
 
-    const resolutions: Resolution[] = [];
+    const all: Resolution[] = [];
     for (const c of candidates) {
       const r = this.tryCandidate(c, infos, receiver, typeArgs);
-      if (r) resolutions.push(r);
+      if (r) all.push(r);
     }
+    // Resolve the way .NET Framework would: overloads it lacks only count when nothing else
+    // applies. So `s.Split(',')` is Split(params char[]), not .NET Core's Split(char, options).
+    const framework = all.filter((r) => !r.candidate.member.notInFramework);
+    const resolutions = framework.length ? framework : all;
     // Instance methods win over extension methods (C# spec §7.6.5.2).
     const instance = resolutions.filter((r) => !r.candidate.extension);
     const pool = instance.length ? instance : resolutions;
@@ -1025,14 +1413,16 @@ export class Binder {
         const shown = name === 'this[]' ? 'this' : name === '.ctor' ? candidates[0].member.declaring.name : name;
         const n = list.args.length;
         this.error(nameSpan, name === 'this[]' ? `No indexer takes ${n} arguments.` : `No overload for method '${shown}' takes ${n} argument${n === 1 ? '' : 's'}.`);
+      } else if (chosen) {
+        this.reportArgumentMismatch(candidates, infos, receiver, typeArgs);
       }
     }
 
     // Final binding of lambdas and out variables against the chosen overload.
     infos.forEach((info, i) => {
       const pi = chosen?.paramFor[i];
-      const param = pi !== undefined ? chosen!.candidate.member.params[pi] : undefined;
-      let pt = param ? m.resolve(param.type, chosen!.subst) : UNKNOWN;
+      const param = pi !== undefined ? chosen?.candidate.member.params[pi] : undefined;
+      let pt = param && chosen ? m.resolve(param.type, chosen.subst) : UNKNOWN;
       if (param?.modifier === 'params' && chosen?.expanded && pt.k === 'array') pt = pt.element;
       if (info.lambda) {
         const sig = m.delegateSignature(pt);
@@ -1055,7 +1445,8 @@ export class Binder {
       const argIndex = list.commas.filter((c) => c < this.probe).length;
       const shownCandidates = candidates.filter((c) => !c.extension || !instance.length || !candidates.some((x) => !x.extension));
       const display = shownCandidates.length ? shownCandidates : candidates;
-      const active = chosen ? display.findIndex((c) => c.member === chosen!.candidate.member) : undefined;
+      const picked = chosen;
+      const active = picked ? display.findIndex((c) => c.member === picked.candidate.member) : undefined;
       const argName = list.args[argIndex]?.name;
       this.signature = {
         candidates: display.map((c) => (chosen && c.member === chosen.candidate.member ? { ...c, subst: chosen.subst } : c)),
@@ -1066,6 +1457,40 @@ export class Binder {
       };
     }
     return chosen;
+  }
+
+  /**
+   * When no overload applies, reports the first argument that can't convert, but only if every
+   * overload whose arity fits fails on an argument whose types the model knows completely. A
+   * failure that might come from a gap in the model stays quiet.
+   */
+  private reportArgumentMismatch(candidates: Candidate[], infos: ArgInfo[], receiver: Type | undefined, typeArgs: Type[] | undefined): void {
+    const m = this.model;
+    let first: { index: number; from: Type; to: Type } | undefined;
+    let fitting = 0;
+    for (const c of candidates) {
+      const mapping = this.mapArgs(c, infos, receiver);
+      if (!mapping) continue;
+      fitting++;
+      const subst = this.inferAndSubst(c, infos, mapping, receiver, typeArgs);
+      let failure: { index: number; from: Type; to: Type } | undefined;
+      for (let i = 0; i < infos.length && !failure; i++) {
+        const info = infos[i];
+        if (info.lambda || info.outDecl || info.value?.kind !== 'value') continue;
+        const pi = mapping.paramFor[i];
+        const param = c.member.params[pi];
+        let pt = m.resolve(param.type, subst);
+        if (param.modifier === 'params' && mapping.expanded && pi === c.member.params.length - 1 && pt.k === 'array') pt = pt.element;
+        if (!m.isDefinite(info.type) || !m.isDefinite(pt)) continue;
+        if (m.conversion(info.type, pt, info.literal) === undefined) failure = { index: i, from: info.type, to: pt };
+      }
+      if (!failure) return;
+      first ??= failure;
+    }
+    if (!first || fitting === 0) return;
+    const arg = infos[first.index].arg;
+    const what = first.from.k === 'null' ? 'null' : `'${m.display(first.from)}'`;
+    this.error(arg, `Argument ${first.index + 1}: cannot convert from ${what} to '${m.display(first.to)}'.`);
   }
 
   /** Maps arguments to parameters, or undefined when the arity can't fit. */
@@ -1243,6 +1668,163 @@ function isString(t: Type): boolean {
   return t.k === 'named' && t.def.key === 'System.String';
 }
 
-export function bind(model: TypeModel, parsed: Parsed, probe = -1): BindResult {
-  return new Binder(model, probe).bind(parsed);
+/** A default value as shown in a signature. The tree only keeps literals' text. */
+function defaultText(e: Expr): string {
+  return e.kind === 'literal' ? e.text : '…';
+}
+
+/** A signature type as a reference, for local functions. Types the model can't name become unknown. */
+function toRef(t: Type): TypeRef {
+  switch (t.k) {
+    case 'named':
+      return { kind: 'named', key: t.def.key, args: t.args.map(toRef) };
+    case 'array':
+      return { kind: 'array', element: toRef(t.element), rank: t.rank };
+    case 'param':
+      return { kind: 'param', name: t.name };
+    default:
+      return { kind: 'named', key: '<unknown>', args: [] };
+  }
+}
+
+/**
+ * `int` for an integer constant expression (which also converts to smaller integral types),
+ * `zero` for a literal 0 (which converts to any enum), otherwise undefined.
+ */
+function constantKind(e: Expr, v: Value): 'int' | 'zero' | undefined {
+  if (v.kind !== 'value' || v.type.k !== 'named' || v.type.def.key !== 'System.Int32') return undefined;
+  if (e.kind === 'literal' && e.literal === 'int') return /^0+$/.test(e.text) ? 'zero' : 'int';
+  return isConstant(e) ? 'int' : undefined;
+}
+
+function isConstant(e: Expr): boolean {
+  switch (e.kind) {
+    case 'literal':
+      return e.literal !== 'null';
+    case 'paren':
+    case 'checked':
+      return isConstant(e.inner);
+    case 'unary':
+      return !e.postfix && ['-', '+', '~'].includes(e.op) && isConstant(e.operand);
+    case 'binary':
+      return ['+', '-', '*', '/', '%', '<<', '>>', '&', '|', '^'].includes(e.op) && isConstant(e.left) && isConstant(e.right);
+    case 'cast':
+      return isConstant(e.operand);
+    case 'member':
+      // `int.MaxValue` and other constants; members of a type, not of a value.
+      return false;
+    default:
+      return false;
+  }
+}
+
+// ---- reachability ------------------------------------------------------------------------------
+
+/**
+ * Whether the end of `s` can be reached (C# spec §8.1). Only `true` itself counts as a constant
+ * condition. When unsure this answers false, so a missing return is never reported wrongly.
+ */
+export function endReachable(s: Stmt): boolean {
+  switch (s.kind) {
+    case 'block': {
+      for (const st of s.statements) if (!endReachable(st)) return false;
+      return true;
+    }
+    case 'return':
+    case 'throw':
+    case 'break':
+    case 'continue':
+      return false;
+    case 'if':
+      if (!s.else) return !isTrue(s.condition) || endReachable(s.then);
+      return endReachable(s.then) || endReachable(s.else);
+    case 'while':
+      return !isTrue(s.condition) || breaks(s.body);
+    case 'for':
+      return (s.condition !== undefined && !isTrue(s.condition)) || breaks(s.body);
+    case 'do':
+      return breaks(s.body) || (!isTrue(s.condition) && (endReachable(s.body) || continues(s.body)));
+    case 'switch': {
+      const hasDefault = s.sections.some((sec) => sec.labels.some((l) => l.kind === 'default'));
+      return !hasDefault || s.sections.some((sec) => sec.statements.some(breaks));
+    }
+    case 'try':
+      if (s.finally && !endReachable(s.finally)) return false;
+      return endReachable(s.block) || s.catches.some((c) => endReachable(c.block));
+    case 'using':
+    case 'lock':
+      return endReachable(s.body);
+    default:
+      return true;
+  }
+}
+
+function isTrue(e: Expr): boolean {
+  return (e.kind === 'literal' && e.literal === 'bool' && e.text === 'true') || (e.kind === 'paren' && isTrue(e.inner));
+}
+
+/** Whether `s` has a `break` that leaves the enclosing loop or switch (not a nested one). */
+function breaks(s: Stmt): boolean {
+  return jumps(s, 'break');
+}
+
+function continues(s: Stmt): boolean {
+  return jumps(s, 'continue');
+}
+
+function jumps(s: Stmt, kind: 'break' | 'continue'): boolean {
+  switch (s.kind) {
+    case 'break':
+    case 'continue':
+      return s.kind === kind;
+    case 'block':
+      return s.statements.some((x) => jumps(x, kind));
+    case 'if':
+      return jumps(s.then, kind) || (!!s.else && jumps(s.else, kind));
+    case 'try':
+      return jumps(s.block, kind) || s.catches.some((c) => jumps(c.block, kind)) || (!!s.finally && jumps(s.finally, kind));
+    case 'using':
+    case 'lock':
+      return jumps(s.body, kind);
+    case 'switch':
+      // A break inside a switch leaves the switch; a continue still targets the loop.
+      return kind === 'continue' && s.sections.some((sec) => sec.statements.some((x) => jumps(x, kind)));
+    default:
+      // Nested loops own their own break and continue.
+      return false;
+  }
+}
+
+export function bind(model: TypeModel, parsed: Parsed, probe = -1, expected?: Type, shapes?: ShapeEnv, wantedShape?: Type): BindResult {
+  return new Binder(model, probe, expected, shapes, wantedShape).bind(parsed);
+}
+
+/**
+ * How a value of type `got` fails to be `want`, as "an int" or "an object"; undefined when it
+ * fits or can't be told. Only clear cases count: a scalar where an object or array is wanted (or
+ * the reverse), or a scalar that doesn't convert to the wanted one.
+ */
+function mismatch(m: TypeModel, got: Type, want: Type): string | undefined {
+  if (got.k === 'unknown' || got.k === 'null' || want.k === 'unknown') return undefined;
+  const ws = shapeOf(want);
+  const gs = shapeOf(got);
+  const isToken = (t: Type) => t.k === 'named' && (t.def.key.startsWith('Newtonsoft.Json.Linq.') || t.def.key === 'System.Object');
+  if (ws && ws.kind !== 'value') {
+    const kind = ws.kind === 'object' ? 'an object' : 'an array';
+    if (gs && gs.kind !== 'value' && gs.kind !== ws.kind) return kind;
+    if (!gs && !isToken(got)) return `${kind}, not ${m.display(got)}`;
+    return undefined;
+  }
+  if (gs && gs.kind !== 'value') return `${m.display(want)}, not ${gs.kind === 'object' ? 'an object' : 'an array'}`;
+  if (isToken(got) || isToken(want)) return undefined;
+  return m.conversion(got, want) === undefined ? `${m.display(want)}, not ${m.display(got)}` : undefined;
+}
+
+/** `context.Variables` (or `(context).Variables`), whose entries carry the variables' shapes. */
+function isVariables(e: Expr | undefined): boolean {
+  while (e?.kind === 'paren') e = e.inner;
+  if (e?.kind !== 'member' || e.name !== 'Variables') return false;
+  let t: Expr = e.target;
+  while (t.kind === 'paren') t = t.inner;
+  return t.kind === 'name' && t.name === 'context';
 }

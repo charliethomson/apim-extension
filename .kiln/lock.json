@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "repo": "apim-extension",
+  "checkoutKey": "ssh_key",
+  "stats": {
+    "pipelineCount": 4,
+    "pipelineSourceLines": 439
+  },
+  "pipelines": [
+    {
+      "name": "extension.ci",
+      "description": "typecheck · lint · unit tests · package · stubs · generated data · integration",
+      "triggers": [
+        {
+          "event": "push",
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "src/**",
+            "test/**",
+            "bench/**",
+            "data/**",
+            "stubs/**",
+            "syntaxes/**",
+            "snippets/**",
+            "images/**",
+            "tools/**",
+            "scripts/ci/**",
+            "package.json",
+            "package-lock.json",
+            "esbuild.mjs",
+            "eslint.config.mjs",
+            "tsconfig.json",
+            "vitest.config.ts",
+            "language-configuration.json",
+            ".vscodeignore",
+            ".kiln/src/pipelines/extension.rs",
+            ".kiln/src/pipelines/mod.rs",
+            ".kiln/src/main.rs",
+            ".kiln/Cargo.toml",
+            ".kiln/Cargo.lock"
+          ]
+        },
+        {
+          "event": "manual"
+        }
+      ],
+      "serialize": "cancel",
+      "jobs": [
+        {
+          "name": "node",
+          "agent": "linux",
+          "image": "rust:1-bookworm",
+          "env": {
+            "CI": "true"
+          },
+          "caches": [
+            "node:npm-modules"
+          ]
+        },
+        {
+          "name": "dotnet",
+          "agent": "linux",
+          "image": "rust:1-bookworm",
+          "caches": [
+            {
+              "key": "dotnet-sdk",
+              "maxGb": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "audit.ci",
+      "description": "npm advisories; blocks on critical and on expired exceptions",
+      "triggers": [
+        {
+          "event": "push",
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "package-lock.json",
+            "audit-exceptions.json",
+            ".kiln/src/pipelines/audit.rs",
+            ".kiln/src/**",
+            ".kiln/Cargo.toml",
+            ".kiln/Cargo.lock"
+          ]
+        },
+        {
+          "event": "schedule",
+          "cron": "0 6 * * 1"
+        },
+        {
+          "event": "manual"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "audit",
+          "agent": "linux",
+          "image": "rust:1-bookworm"
+        }
+      ]
+    },
+    {
+      "name": "repo.checks",
+      "description": "`.woodpecker/` and `.kiln/lock.json` are what `.kiln/src` emits",
+      "triggers": [
+        {
+          "event": "push",
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".kiln/**",
+            ".woodpecker/**"
+          ]
+        },
+        {
+          "event": "manual"
+        }
+      ],
+      "serialize": "cancel",
+      "jobs": [
+        {
+          "name": "kiln",
+          "agent": "linux",
+          "image": "rust:1-bookworm"
+        }
+      ]
+    },
+    {
+      "name": "extension.release",
+      "description": "test, package and publish the .vsix to the Visual Studio Marketplace",
+      "triggers": [
+        {
+          "event": "tag",
+          "patterns": [
+            "v*"
+          ]
+        },
+        {
+          "event": "manual"
+        }
+      ],
+      "serialize": "finish",
+      "jobs": [
+        {
+          "name": "publish",
+          "agent": "linux",
+          "image": "rust:1-bookworm",
+          "env": {
+            "CI": "true"
+          },
+          "caches": [
+            "node:npm-modules"
+          ],
+          "secrets": [
+            "vsce_pat"
+          ]
+        }
+      ]
+    }
+  ]
+}
+

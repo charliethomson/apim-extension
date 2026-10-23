@@ -11,7 +11,7 @@ import type { OffsetRange } from '../sourceMap';
 import { resolveDef, sectionOf } from './defs';
 import { SECTIONS, type AttributeDef, type Catalog, type ElementDef } from './schema';
 
-export type XmlItemKind = 'element' | 'closeTag' | 'attribute' | 'value' | 'snippet' | 'namedValue' | 'fragment';
+export type XmlItemKind = 'element' | 'closeTag' | 'attribute' | 'value' | 'snippet' | 'namedValue' | 'fragment' | 'variable' | 'backend';
 
 export interface XmlItem {
   label: string;
@@ -28,8 +28,32 @@ export interface XmlCompletionContext {
   catalog: Catalog;
   /** Fragment ids known in the workspace. */
   fragmentIds?: readonly string[];
-  /** Named values known in the workspace. */
-  namedValues?: readonly string[];
+  /** Named values known in the workspace or on the instance; a name alone, or with its docs. */
+  namedValues?: readonly (string | Suggestion)[];
+  /** Backend ids, for set-backend-service's backend-id. */
+  backends?: readonly Suggestion[];
+  /** Variable names to offer where a variable is named (set-variable's name, `*-variable-name`). */
+  variables?: readonly VariableSuggestion[];
+}
+
+/** A name to offer, with what to show beside it. */
+export interface Suggestion {
+  name: string;
+  detail?: string;
+  documentation?: string;
+}
+
+/** A variable name worth offering, best first by `sortText`. */
+export interface VariableSuggestion {
+  name: string;
+  detail?: string;
+  documentation?: string;
+  sortText: string;
+}
+
+/** Whether `attr` on `el` names a context variable that the policy sets. */
+export function namesVariable(el: Element, attr: Attribute): boolean {
+  return (el.name === 'set-variable' && attr.name === 'name') || attr.name.endsWith('variable-name');
 }
 
 const NAME = '[A-Za-z_:][-A-Za-z0-9_:.]*';
@@ -219,6 +243,14 @@ function valueItems(doc: Document, el: Element, attr: Attribute, offset: number,
   if (el.name === 'include-fragment' && attr.name === 'fragment-id') {
     for (const id of ctx.fragmentIds ?? []) items.push({ label: id, kind: 'fragment', insert: escapeSnippet(id), range });
   }
+  if (el.name === 'set-backend-service' && attr.name === 'backend-id') {
+    for (const b of ctx.backends ?? []) items.push({ label: b.name, kind: 'backend', insert: escapeSnippet(b.name), range, detail: b.detail, documentation: b.documentation });
+  }
+  if (namesVariable(el, attr)) {
+    for (const v of ctx.variables ?? []) {
+      items.push({ label: v.name, kind: 'variable', insert: escapeSnippet(v.name), range, detail: v.detail, documentation: v.documentation, sortText: v.sortText });
+    }
+  }
   const choices = def?.enum ?? (def?.type === 'bool' ? ['true', 'false'] : []);
   for (const v of choices) items.push({ label: v, kind: 'value', insert: escapeSnippet(v), range });
   const typed = doc.source.slice(range.start, offset);
@@ -240,13 +272,17 @@ function expressionSnippets(range: OffsetRange): XmlItem[] {
 function namedValueItems(src: string, offset: number, typed: string, ctx: XmlCompletionContext): XmlItem[] {
   const closed = src.startsWith('}}', offset);
   const range = { start: offset - typed.length, end: offset };
-  return (ctx.namedValues ?? []).map((name) => ({
-    label: name,
-    kind: 'namedValue' as const,
-    insert: closed ? escapeSnippet(name) : `${escapeSnippet(name)}}}`,
-    range,
-    documentation: 'Named value, substituted before the policy runs.',
-  }));
+  return (ctx.namedValues ?? []).map((nv) => {
+    const { name, detail, documentation } = typeof nv === 'string' ? { name: nv, detail: undefined, documentation: undefined } : nv;
+    return {
+      label: name,
+      kind: 'namedValue' as const,
+      insert: closed ? escapeSnippet(name) : `${escapeSnippet(name)}}}`,
+      range,
+      detail,
+      documentation: documentation ?? 'Named value, substituted before the policy runs.',
+    };
+  });
 }
 
 // ---- helpers ----------------------------------------------------------------------------

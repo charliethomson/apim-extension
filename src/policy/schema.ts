@@ -11,7 +11,7 @@ export interface AttributeDef {
   expressions?: boolean;
   /** Closed set of literal values. */
   enum?: string[];
-  /** Value type, used to check literals and to type the shadow C# method. */
+  /** Value type, used to check literals and to type the attribute's expression. */
   type?: 'bool' | 'int' | 'string';
   description: string;
 }

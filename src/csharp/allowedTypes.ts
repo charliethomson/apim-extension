@@ -9,7 +9,7 @@
  * written in the code (`DateTime.FromBinary`); the semantic pass covers the rest.
  */
 
-import { KEYWORDS, lex, type Token } from '../parser/csharpLexer';
+import { KEYWORDS, significantTokens, type Token } from '../parser/csharpLexer';
 import type { OffsetRange } from '../sourceMap';
 import type { Reference } from './lang/binder';
 
@@ -34,7 +34,7 @@ export interface LintFinding {
   name: string;
 }
 
-/** Namespaces APIM imports into every expression (the shadow's usings, minus our stubs). */
+/** Namespaces APIM imports into every expression. */
 export const APIM_NAMESPACES = [
   'System',
   'System.Collections.Generic',
@@ -72,29 +72,7 @@ export class Allowlist {
 
   private readonly implicitMembers: Set<string>;
 
-  /** Allowed full names including our stubs' namespace and generic forms like `System.Func<T>`. */
-  isFullNameAllowed(fullName: string): boolean {
-    const name = fullName.replace(/<.*$/, '');
-    return name.startsWith('Apim.Policies.') || this.allowed.has(name);
-  }
 
-  /** Restricted types (with member lists) by their short name, for hover text like `DateTime.Now`. */
-  restrictedByShortName(short: string): string | undefined {
-    for (const [name, rule] of this.allowed) {
-      if (rule !== '*' && shortName(name) === short) return name;
-    }
-    return undefined;
-  }
-
-  /** Member names that some restricted type has but doesn't allow: worth asking the server about. */
-  suspiciousMembers(): Set<string> {
-    const out = new Set<string>();
-    for (const [name, rule] of this.allowed) {
-      if (rule === '*') continue;
-      for (const m of this.bcl.members[name] ?? []) if (this.memberProblem(name, m)) out.add(m);
-    }
-    return out;
-  }
 
   isNamespace(name: string): boolean {
     return this.namespaces.has(name);
@@ -112,6 +90,11 @@ export class Allowlist {
   knowsType(fullName: string): boolean {
     const i = fullName.lastIndexOf('.');
     return i > 0 && (this.bcl.types[fullName.slice(i + 1)] ?? []).includes(fullName.slice(0, i));
+  }
+
+  /** Members every type has (ToString, Equals, …), which never make a type count as used. */
+  isImplicitMember(member: string): boolean {
+    return this.implicitMembers.has(member);
   }
 
   isTypeAllowed(fullName: string): boolean {
@@ -250,6 +233,13 @@ export function lintReferences(refs: readonly Reference[], allow: Allowlist): Li
       continue;
     }
     const member = r.member.kind === 'ctor' ? '(Constructor)' : r.member.kind === 'indexer' ? 'Item' : r.member.name;
+    // The gateway also rejects a member of a type outside the allowlist when the type is only
+    // inferred: `g.Key` on the IGrouping that GroupBy returns.
+    // Reported once per expression, and not again when the type is written out too.
+    if (!allow.isTypeAllowed(type) && !allow.isImplicitMember(member) && r.member.kind !== 'ctor') {
+      if (!refs.some((o) => !o.member && o.def === r.def) && !out.some((f) => f.name === type)) out.push({ range: r.span, kind: 'type', name: type, message: `'${type}' isn't on the APIM policy expression allowlist ('${member}' is one of its members).` });
+      continue;
+    }
     const allowed = allow.memberProblem(type, member);
     if (!allowed) continue;
     if (member === '(Constructor)') out.push({ range: r.span, kind: 'member', name: `${type}..ctor`, message: `APIM doesn't allow constructing '${shortName(type)}'.` });
@@ -273,19 +263,6 @@ function shortName(full: string): string {
   return full.slice(full.lastIndexOf('.') + 1);
 }
 
-/** Tokens without comments, with string tokens' interpolation holes expanded in place. */
-function significantTokens(code: string): Token[] {
-  const out: Token[] = [];
-  const add = (start: number, end: number) => {
-    for (const t of lex(code, start, end)) {
-      if (t.kind === 'comment') continue;
-      out.push(t);
-      for (const h of t.holes ?? []) add(h.start, h.end);
-    }
-  };
-  add(0, code.length);
-  return out;
-}
 
 /** Maximal `a.b.c` identifier chains (skipping generic argument lists between parts). */
 function* chains(code: string, toks: Token[]): Generator<Chain> {

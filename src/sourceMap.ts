@@ -3,9 +3,8 @@
  *
  * A map is a list of segments, sorted and non-overlapping in both generated and source
  * space. A `copy` segment maps character for character. An `opaque` segment stands for a
- * replacement whose lengths differ (an entity like `&quot;` decoded to `"`, or a named value
- * rewritten for the shadow C# file); offsets inside it map to its start or end. Generated
- * text not covered by any segment (scaffolding in the shadow file) has no source position.
+ * replacement whose lengths differ (an entity like `&quot;` decoded to `"`); offsets inside it
+ * map to its start or end. Generated text not covered by any segment has no source position.
  */
 
 export interface Segment {
@@ -78,50 +77,6 @@ export class SourceMap {
     return new SourceMap(out);
   }
 
-  /** Returns a map with every generated offset shifted by `delta`. */
-  shiftGenerated(delta: number): SourceMap {
-    return new SourceMap(this.segments.map((s) => ({ ...s, gen: s.gen + delta })));
-  }
-
-  /**
-   * Chains `outer` (A → B) with `inner` (B → C) into A → C. Copy segments of `outer` are split
-   * where `inner` changes segment, and anything touching an opaque segment becomes opaque.
-   */
-  static compose(outer: SourceMap, inner: SourceMap): SourceMap {
-    const b = new SourceMapBuilder();
-    for (const o of outer.segments) {
-      b.seek(o.gen);
-      if (o.kind === 'opaque') {
-        const r = inner.rangeToSource({ start: o.src, end: o.src + o.srcLen });
-        if (r) b.opaque(r.start, r.end - r.start, o.genLen);
-        else b.skip(o.genLen);
-        continue;
-      }
-      // Walk the copy segment's B range through inner's segments (whose gen side is B).
-      let mid = o.src;
-      const midEnd = o.src + o.srcLen;
-      while (mid < midEnd) {
-        const i = inner.segments.find((s) => mid >= s.gen && mid < s.gen + s.genLen);
-        if (!i) {
-          // Unmapped in inner: emit unmapped generated text up to the next inner segment.
-          const next = inner.segments.find((s) => s.gen > mid);
-          const stop = Math.min(midEnd, next ? next.gen : midEnd);
-          b.skip(stop - mid);
-          mid = stop;
-          continue;
-        }
-        const stop = Math.min(midEnd, i.gen + i.genLen);
-        if (i.kind === 'copy') {
-          b.copy(i.src + (mid - i.gen), stop - mid);
-        } else {
-          // Partially or fully covering an opaque inner segment: map onto the whole of it.
-          b.opaque(i.src, i.srcLen, stop - mid);
-        }
-        mid = stop;
-      }
-    }
-    return b.build();
-  }
 }
 
 /**
@@ -158,22 +113,9 @@ export class SourceMapBuilder {
     return this;
   }
 
-  /** Appends `genLen` generated characters whose mapping is `map` (rebased to the cursor). */
-  embed(map: SourceMap, genLen: number): this {
-    for (const s of map.segments) this.segments.push({ ...s, gen: s.gen + this.cursor });
-    this.cursor += genLen;
-    return this;
-  }
-
   /** Generated text with no source. */
   skip(genLen: number): this {
     this.cursor += genLen;
-    return this;
-  }
-
-  /** Moves the generated cursor forward to `gen` (unmapped gap). */
-  seek(gen: number): this {
-    if (gen > this.cursor) this.cursor = gen;
     return this;
   }
 

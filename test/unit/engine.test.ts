@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { RawModel } from '../../src/csharp/lang/model';
 import { CSharpEngine, type CodeKind } from '../../src/csharp/lang/service';
 
 const root = join(__dirname, '..', '..');
 const read = (p: string) => readFileSync(join(root, p), 'utf8');
-const engine = CSharpEngine.load(JSON.parse(read('data/csharp-model.json')), read('stubs/ApimContext.cs'));
+const engine = CSharpEngine.load(JSON.parse(read('data/csharp-model.json')) as RawModel, read('stubs/ApimContext.cs'));
 
 /** Splits `a.|b` into the code and the cursor offset. */
 function at(marked: string): [string, number] {
@@ -52,6 +53,9 @@ describe('types of valid policy expressions', () => {
     ['new int[3][]', 'int[][]'],
     ['new[] { 1, 2 }.Sum()', 'int'],
     ['new List<string> { "a" }.Count', 'int'],
+    // A property of the same name doesn't hide the LINQ extension method when it's invoked.
+    ['new List<string> { "a" }.Count(s => s.Length > 0)', 'int'],
+    ['JArray.Parse("[]").Count(t => (string)t["g"] == "f")', 'int'],
     ['new Dictionary<string, int> { ["a"] = 1 }.Keys', 'Dictionary<string, int>.KeyCollection'],
     ['(1, "a").Item2', 'string'],
     ['1 + 2.0f', 'float'],
@@ -99,6 +103,7 @@ describe('diagnostics', () => {
     ['context.Request.Url.Host.Substring()', "No overload for method 'Substring' takes 0 arguments."],
     ['new Regex()', "No overload for method 'Regex' takes 0 arguments."],
     ['context.Request.Url.Port.Length', "'int' does not contain a definition for 'Length'."],
+    ['"a".Length()', "'int' isn't invocable."],
     ['string.Length', "An object reference is required to access 'string.Length'."],
     ['"a".IsNullOrEmpty("b")', "Member 'string.IsNullOrEmpty' is static; qualify it with the type name instead."],
     ['context.Request = null', "Property 'Request' is read-only."],
@@ -142,6 +147,20 @@ describe('diagnostics', () => {
     ['switch (1) { x; }', "'case' or 'default' expected.", 'block'],
   ])('syntax: %s', (code, message, kind = 'expr') => {
     expect(errors(code, kind)).toContain(message);
+  });
+
+  it('checks a set-variable value against the types a variable may hold', () => {
+    const variable = (code: string, kind: CodeKind = 'expr') => engine.diagnostics(code, kind, 'variable').map((d) => d.message);
+    expect(variable('(object)null')).toEqual(["A set-variable value can't be 'object'. Use a string, bool, number, char, Guid, DateTime, TimeSpan, byte[] or JSON (JToken) value."]);
+    expect(variable('context.Variables["x"]')).toHaveLength(1);
+    expect(variable('new List<string>()')).toHaveLength(1);
+    for (const ok of ['"a"', '(int?)null', 'Guid.NewGuid()', 'new byte[0]', 'new JObject()', 'context.Variables.GetValueOrDefault<string>("x")', 'null', 'context.Request.Body.As<JArray>()']) {
+      expect(variable(ok), ok).toEqual([]);
+    }
+    expect(variable('if (true) { return new JObject(); } return null;', 'block')).toEqual([]);
+    expect(variable('return new object();', 'block')).toHaveLength(1);
+    // Other errors come first; the type is only checked once the code binds cleanly.
+    expect(variable('nope')).toEqual(["The name 'nope' does not exist in the current context."]);
   });
 
   it("doesn't report what it can't see: unknown receivers and dynamic values stay quiet", () => {

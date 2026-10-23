@@ -1,6 +1,5 @@
-// Runs the integration suite in a downloaded VS Code with the C# extension installed, on a
+// Runs the integration suite in a downloaded VS Code, with every other extension disabled, on a
 // temporary copy of test/fixtures (the tests edit documents).
-import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -15,13 +14,10 @@ async function main() {
   mkdirSync(join(workspace, '.vscode'), { recursive: true });
 
   const vscodeExecutablePath = await downloadAndUnzipVSCode(process.env.VSCODE_VERSION ?? 'stable');
-  const withCSharp = process.env.APIM_IT_NO_CSHARP !== '1';
-  const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
-  if (withCSharp) {
-    const root = process.getuid?.() === 0 ? ['--no-sandbox'] : [];
-    const r = spawnSync(cli, [...cliArgs, ...root, '--install-extension', 'ms-dotnettools.csharp'], { stdio: 'inherit', shell: process.platform === 'win32' });
-    if (r.status !== 0) throw new Error('installing the C# extension failed');
-  }
+  const [, ...resolvedArgs] = resolveCliArgsFromVSCodeExecutablePath(vscodeExecutablePath);
+  // VS Code listens on a socket inside the user data dir, and macOS caps socket paths at 103
+  // bytes, so a deep checkout (a git worktree, say) needs a shorter one.
+  const cliArgs = resolvedArgs.map((a) => (a.startsWith('--user-data-dir=') && a.length > 80 ? `--user-data-dir=${mkdtempSync(join(tmpdir(), 'apim-ud-'))}` : a));
 
   await runTests({
     vscodeExecutablePath,
@@ -34,9 +30,9 @@ async function main() {
       '--skip-release-notes',
       // Containers run as root, where Electron refuses to start without these.
       ...(process.getuid?.() === 0 ? ['--no-sandbox', '--disable-gpu'] : []),
-      ...(withCSharp ? [] : ['--disable-extensions']),
+      '--disable-extensions',
     ],
-    extensionTestsEnv: { APIM_IT_WITH_CSHARP: withCSharp ? '1' : '0', ...(process.env.APIM_DEBUG ? { APIM_DEBUG: '1' } : {}) },
+    extensionTestsEnv: process.env.APIM_DEBUG ? { APIM_DEBUG: '1' } : {},
   });
 }
 

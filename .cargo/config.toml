@@ -1,0 +1,4 @@
+# For `cargo run --manifest-path .kiln/Cargo.toml` from the repo root, which is how CI and
+# `emit` run: cargo reads config from the working directory up, not from the manifest's.
+[net]
+git-fetch-with-cli = true

@@ -1,0 +1,9 @@
+<fragment>
+    <set-variable name="sh-result" value="@{
+        var count = 3;
+        return new JObject {
+            ["count"] = count,
+            ["items"] = new JArray(new[] { "a", "b" }.Select(s => new JObject { ["name"] = s })),
+        };
+    }" />
+</fragment>

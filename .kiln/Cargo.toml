@@ -1,0 +1,28 @@
+# apim-extension's `.kiln/` crate: this repo's CI pipelines, as Rust.
+#
+# `cargo run --manifest-path .kiln/Cargo.toml -- emit woodpecker` writes `.woodpecker/*.yml`,
+# and `-- describe > .kiln/lock.json` the lockfile; `repo.checks` fails when either is stale.
+# Never edit `.woodpecker/` by hand.
+#
+# A standalone workspace (the empty `[workspace]`), so editing a pipeline never touches anything
+# else. Its `Cargo.lock` is committed: kiln and libci come from git with no `rev`, and two runs a
+# week apart must compile the same DSL.
+[workspace]
+
+[package]
+name = "apim-extension-kiln"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Both private, over ssh (https://standards.thmsn.dev/d/rust-conventions). Every feature is code
+# every job compiles before it starts, so the list is kept to what's used:
+#
+#   node    npm ci / run / npx / audit, in extension.ci, extension.release and audit.ci
+#   git     the drift check on the generated data
+#   libci   version (the release version), audit (the critical-only gate), secrets (the fleet's
+#           secret names). Not `templates`: libci's `WebCi` is named `web.ci`, and the docker and
+#           rust recipes it turns on would be compiled by every job for nothing.
+[dependencies]
+kiln = { git = "ssh://git@github.com/charliethomson/kiln.git", features = ["node", "git"] }
+libci = { git = "ssh://git@github.com/charliethomson/libci.git", features = ["version", "audit", "secrets"] }

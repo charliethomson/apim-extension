@@ -33,6 +33,8 @@ export interface Token {
   holes?: InterpHole[];
   /** Set when the token is malformed (unterminated string, say). */
   error?: string;
+  /** Set when the token is newer syntax than C# 7.3: what it is and the version it needs. */
+  newer?: { feature: string; version: string };
 }
 
 export interface Trivia {
@@ -73,7 +75,7 @@ export const PREDEFINED_TYPES: Readonly<Record<string, string>> = {
 };
 
 /** Longest first, so `<<=` wins over `<<` and `<`. */
-const OPERATORS = ['<<=', '??=', '=>', '??', '?.', '::', '++', '--', '&&', '||', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<', '->'];
+const OPERATORS = ['<<=', '??=', '=>', '??', '?.', '::', '..', '++', '--', '&&', '||', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<', '->'];
 
 const NAMED_VALUE = /\{\{([A-Za-z0-9._-]+)\}\}/y;
 
@@ -107,6 +109,16 @@ export function lexAll(text: string, start = 0, end = text.length): LexResult {
         if (raw.error) errors.push({ start: raw.start, end: raw.end, message: raw.error });
         break;
       case 'string':
+        if (slice === '""' && text[raw.end] === '"') {
+          // A raw string literal (C# 11): three or more quotes, closed by the same number.
+          let n = 2;
+          while (raw.end + n - 2 < end && text[raw.end + n - 2] === '"') n++;
+          const close = text.indexOf('"'.repeat(n), raw.start + n);
+          const stop = close < 0 || close + n > end ? end : close + n;
+          tokens.push({ kind: 'string', start: raw.start, end: stop, text: text.slice(raw.start, stop), error: close < 0 ? 'Unterminated raw string literal.' : undefined, newer: { feature: 'Raw string literals', version: '11' } });
+          i = stop;
+          break;
+        }
         if (raw.holes || slice[0] === '$' || slice[1] === '$') {
           tokens.push({
             kind: 'interp',
@@ -114,6 +126,7 @@ export function lexAll(text: string, start = 0, end = text.length): LexResult {
             end: raw.end,
             text: slice,
             error: raw.error,
+            newer: slice.startsWith('@$') ? { feature: "Interpolated verbatim strings written '@$'", version: '8' } : undefined,
             holes: (raw.holes ?? []).map((h) => {
               const codeEnd = alignmentStart(text, h.start, h.end);
               return { start: h.start, end: codeEnd, tokens: lexAll(text, h.start, codeEnd).tokens };

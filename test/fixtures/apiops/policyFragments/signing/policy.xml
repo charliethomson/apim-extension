@@ -1,0 +1,20 @@
+<!--
+    Signs the outgoing request with an HMAC of the URL.
+
+    @in  {string} sig-key        The HMAC key.
+    @in  {int}    [sig-ttl=300]  Seconds the signature holds.
+
+    @out {string} sig-header  The value for the Authorization header.
+-->
+<fragment>
+    <set-variable name="sig-header" value="@{
+        var key = context.Variables.GetValueOrDefault<string>("sig-key");
+        var ttl = context.Variables.GetValueOrDefault<int>("sig-ttl", 300);
+        var expires = DateTimeOffset.UtcNow.AddSeconds(ttl).ToUnixTimeSeconds();
+        var data = Encoding.UTF8.GetBytes(context.Request.Url.Path + expires);
+        using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key)))
+        {
+            return "HMAC " + expires + ":" + Convert.ToBase64String(hmac.ComputeHash(data));
+        }
+    }" />
+</fragment>

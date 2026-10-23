@@ -57,25 +57,5 @@ describe('SourceMap', () => {
     expect(s.toSource(2)).toBe(18);
   });
 
-  it('shifts', () => {
-    expect(map.shiftGenerated(100).toSource(100)).toBe(10);
-  });
 
-  it('composes A→B with B→C', () => {
-    // B is the decoded text above (gen of `map`), A wraps it in 3 chars of scaffolding.
-    const outer = new SourceMapBuilder().skip(3).copy(0, 5).build();
-    const ac = SourceMap.compose(outer, map);
-    expect(ac.toSource(1)).toBeUndefined();
-    expect(ac.toSource(3)).toBe(10);
-    expect(ac.toSource(5, 'start')).toBe(12);
-    expect(ac.toSource(6, 'end')).toBe(18);
-    expect(ac.toSource(7)).toBe(19);
-    expect(ac.toGenerated(19)).toBe(7);
-  });
-
-  it('composes an opaque outer segment onto its whole inner range', () => {
-    const outer = new SourceMapBuilder().copy(0, 2).opaque(2, 3, 10).build();
-    const ac = SourceMap.compose(outer, map);
-    expect(ac.rangeToSource({ start: 2, end: 12 })).toEqual({ start: 12, end: 20 });
-  });
 });

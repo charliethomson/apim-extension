@@ -231,11 +231,11 @@ describe('validate', () => {
 });
 
 describe('validate with the bundled catalog', async () => {
-  const { readFileSync } = await import('node:fs');
-  const { join } = await import('node:path');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
   const { catalog: real } = await import('../../src/policy/catalog');
   const run = (file: string) =>
-    validate(parse(readFileSync(join(__dirname, '..', 'fixtures', file), 'utf8')), real).map((d) => d.code);
+    validate(parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', file), 'utf8')), real).map((d) => d.code);
 
   it.each([
     'raw/echo.policy.xml',
@@ -245,7 +245,7 @@ describe('validate with the bundled catalog', async () => {
     'apiops/apis/echo/policy.xml',
     'apiops/apis/random-users/policy.xml',
     'apiops/policyFragments/rate-limit/policy.xml',
-    'apiops/policyFragments/random-user-pipeline/policy.xml',
+    'apiops/policyFragments/random-user/policy.xml',
   ])('%s is valid', (file) => {
     expect(run(file)).toEqual([]);
   });

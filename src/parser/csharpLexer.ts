@@ -48,6 +48,23 @@ export function* lex(text: string, start = 0, end = text.length): Generator<Toke
   }
 }
 
+/**
+ * Tokens without comments, with each interpolated string followed by the tokens of its holes, so
+ * code inside `$"…{…}…"` is seen like any other code.
+ */
+export function significantTokens(code: string): Token[] {
+  const out: Token[] = [];
+  const add = (start: number, end: number) => {
+    for (const t of lex(code, start, end)) {
+      if (t.kind === 'comment') continue;
+      out.push(t);
+      for (const h of t.holes ?? []) add(h.start, h.end);
+    }
+  };
+  add(0, code.length);
+  return out;
+}
+
 /** Lexes the single token starting at `i` (which must not be whitespace). */
 export function lexOne(text: string, i: number, end: number): Token {
   const c = text[i];

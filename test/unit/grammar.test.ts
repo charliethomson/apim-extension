@@ -22,9 +22,9 @@ beforeAll(async () => {
       createOnigScanner: (sources) => new oniguruma.OnigScanner(sources),
       createOnigString: (s) => new oniguruma.OnigString(s),
     }),
-    loadGrammar: async (scopeName) => {
+    loadGrammar: (scopeName) => {
       const path = grammarFiles[scopeName];
-      return path ? vsctm.parseRawGrammar(readFileSync(path, 'utf8'), path) : null;
+      return Promise.resolve(path ? vsctm.parseRawGrammar(readFileSync(path, 'utf8'), path) : null);
     },
     // Mirrors package.json: the injection is only injected into the APIM grammar.
     getInjections: (scopeName) => (scopeName === 'text.xml.apim' ? ['apim.expression.injection'] : undefined),
@@ -50,6 +50,18 @@ async function tokenize(source: string, scope = 'text.xml.apim'): Promise<Tok[]>
 }
 
 /** Scopes of the first token whose text is exactly `text`, searching from the `nth` match. */
+interface GrammarContribution {
+  embeddedLanguages: Record<string, string>;
+  tokenTypes: Record<string, string>;
+  unbalancedBracketScopes: string[];
+}
+
+/** The APIM grammar's entry in package.json's contributes.grammars. */
+function grammarContribution(): GrammarContribution {
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { contributes: { grammars: GrammarContribution[] } };
+  return pkg.contributes.grammars[0];
+}
+
 function scopesOf(toks: Tok[], text: string, nth = 0): string[] {
   const hits = toks.filter((t) => t.text === text);
   const hit = hits[nth];
@@ -107,8 +119,7 @@ describe('expression injection grammar', () => {
 
   it('scopes C# comparison and arrow operators as unbalanced brackets, but not generics', async () => {
     // VS Code's bracket colouriser flags lone < and > red unless their scope is listed here.
-    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-    const unbalanced: string[] = pkg.contributes.grammars[0].unbalancedBracketScopes;
+    const unbalanced = grammarContribution().unbalancedBracketScopes;
     const isUnbalanced = (scopes: string[]) => scopes.some((s) => unbalanced.some((u) => s.startsWith(u)));
     const line = '<set-body>@{ if (a < b && c >= d) { xs.Where(x => x > 1); } return new List<int>(); }</set-body>';
     const toks = await tokenize(line);
@@ -139,7 +150,7 @@ describe('bracket and token types as VS Code applies them', () => {
   ];
 
   async function classify(): Promise<{ text: string; type: number; balanced: boolean }[]> {
-    const cfg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).contributes.grammars[0];
+    const cfg = grammarContribution();
     const types: Record<string, number> = { other: 0, comment: 1, string: 2, regex: 3 };
     // A fresh registry: one that already loaded the grammar without configuration reuses it.
     const fresh = new vsctm.Registry({
@@ -147,15 +158,15 @@ describe('bracket and token types as VS Code applies them', () => {
         createOnigScanner: (sources) => new oniguruma.OnigScanner(sources),
         createOnigString: (str) => new oniguruma.OnigString(str),
       }),
-      loadGrammar: async (scopeName) => {
+      loadGrammar: (scopeName) => {
         const path = grammarFiles[scopeName];
-        return path ? vsctm.parseRawGrammar(readFileSync(path, 'utf8'), path) : null;
+        return Promise.resolve(path ? vsctm.parseRawGrammar(readFileSync(path, 'utf8'), path) : null);
       },
       getInjections: (scopeName) => (scopeName === 'text.xml.apim' ? ['apim.expression.injection'] : undefined),
     });
     const grammar = (await fresh.loadGrammarWithConfiguration('text.xml.apim', 1, {
       embeddedLanguages: Object.fromEntries(Object.keys(cfg.embeddedLanguages).map((k) => [k, 2])),
-      tokenTypes: Object.fromEntries(Object.entries(cfg.tokenTypes as Record<string, string>).map(([k, v]) => [k, types[v]])),
+      tokenTypes: Object.fromEntries(Object.entries(cfg.tokenTypes).map(([k, v]) => [k, types[v]])),
       balancedBracketSelectors: ['*'],
       unbalancedBracketSelectors: cfg.unbalancedBracketScopes,
     }))!;

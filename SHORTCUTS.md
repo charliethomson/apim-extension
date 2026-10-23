@@ -18,11 +18,39 @@ workflows and compose files every session.
   shortcut works.
 - **No secrets.** Reference an env var or Komodo Variable; never paste the value.
 
-Keep it under ~15 entries. Full convention: [`standards/docs/shortcuts.md`](standards/docs/shortcuts.md).
+Keep it under ~15 entries. Full convention: [shortcuts](https://standards.thmsn.dev/d/shortcuts).
 
 ---
 
-_Nothing recorded yet — the next agent to go digging should fix that._
+## What version is live on the Marketplace?
+
+```sh
+npx --no-install vsce show thmsn-dev.apim-policy --json | node -p 'const v=JSON.parse(require("fs").readFileSync(0)).versions[0]; v.version + " " + v.lastUpdated'
+```
+
+Compare with the next section's answer. A `v*` tag or a manual run of `extension.release`
+publishes; until then `main` is ahead of the Marketplace.
+
+_Verified: 2026-10-23_
+
+## What version would CI build or publish from here?
+
+```sh
+eval "$(scripts/ci/version.sh)"; echo "$RELEASE_VERSION $COMMIT dirty=$DIRTY"
+```
+
+The same rule the release pipeline applies (libci's `Version::derive`), so this is the version a
+publish from this commit gets. It needs full history and tags, and refuses a shallow clone.
+
+_Verified: 2026-10-23_
+
+## Which build is a running VS Code using?
+
+The first line of the **APIM Policy** output channel (View → Output) once a policy is open:
+`apim-policy <version> (<commit>[, dirty])`. A dev build (Run Extension) reports the
+`package.json` placeholder `0.0.1`; a packaged build reports the derived version.
+
+_Verified: 2026-10-23_
 
 <!--
 Format — one heading per question, phrased the way it actually gets asked:

@@ -152,3 +152,22 @@ describe('xmlCompletions: named values and text', () => {
     expect(complete('<policies><inbound><base>@|</base></inbound></policies>').items).toBeUndefined();
   });
 });
+
+describe('xmlCompletions: variable names', () => {
+  const variables = [{ name: 'sig-key', detail: '@in of signing (required)', sortText: '00000' }];
+  const names = (text: string) => {
+    const offset = text.indexOf('|');
+    const src = text.slice(0, offset) + text.slice(offset + 1);
+    return (xmlCompletions(parse(src), offset, { catalog, variables }) ?? []).filter((i) => i.kind === 'variable').map((i) => i.label);
+  };
+
+  it("offers them in set-variable's name and any *-variable-name attribute", () => {
+    expect(names('<policies><inbound><set-variable name="|" value="1" /></inbound></policies>')).toEqual(['sig-key']);
+    expect(names('<policies><inbound><send-request response-variable-name="|" /></inbound></policies>')).toEqual(['sig-key']);
+  });
+
+  it('and nowhere else', () => {
+    expect(names('<policies><inbound><set-variable name="x" value="|" /></inbound></policies>')).toEqual([]);
+    expect(names('<policies><inbound><set-header name="|" /></inbound></policies>')).toEqual([]);
+  });
+});

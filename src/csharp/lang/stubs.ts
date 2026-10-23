@@ -1,8 +1,8 @@
 /**
  * Reads stubs/ApimContext.cs into type definitions for the engine. It understands the shapes the
  * stubs use: a namespace with usings, interfaces, sealed and static classes, and enums, whose
- * members are properties (`{ get; }` or `=> throw null`), methods, constructors and enum values,
- * each with an optional `///` summary.
+ * members are properties (`{ get; }` or `=> throw null`), indexers, methods, constructors and enum
+ * values, each with an optional `///` summary.
  */
 
 import { lexAll, PREDEFINED_TYPES, type Token } from './lexer';
@@ -183,6 +183,14 @@ export function readStubs(source: string, raw: RawModel): TypeDef[] {
       }
       i = typeRead.pos;
       const n = t();
+      if (n.kind === 'keyword' && n.text === 'this' && isText('[', i + 1)) {
+        // T this[string name] { get; }
+        i += 2;
+        const params = readParams([...typeParams], ']');
+        def.members.push(member(def, { name: 'this[]', kind: 'indexer', isStatic: false, type: toRef(typeRead.type, typeParams), params, doc: docBefore(memberStart), location: locate(n.start) }));
+        skipMember();
+        continue;
+      }
       if (n.kind !== 'ident') {
         skipMember();
         continue;
@@ -225,9 +233,9 @@ export function readStubs(source: string, raw: RawModel): TypeDef[] {
   }
   return defs;
 
-  function readParams(scope: string[]): ParamDef[] {
+  function readParams(scope: string[], close = ')'): ParamDef[] {
     const params: ParamDef[] = [];
-    while (t().kind !== 'eof' && !isText(')')) {
+    while (t().kind !== 'eof' && !isText(close)) {
       let modifier: ParamDef['modifier'];
       if (['this', 'out', 'ref', 'in', 'params'].includes(t().text)) modifier = tokens[i++].text as ParamDef['modifier'];
       const r = readType(text, tokens, i);
@@ -237,14 +245,14 @@ export function readStubs(source: string, raw: RawModel): TypeDef[] {
       if (isText('=')) {
         i++;
         const start = t().start;
-        while (t().kind !== 'eof' && !isText(',') && !isText(')')) i++;
+        while (t().kind !== 'eof' && !isText(',') && !isText(close)) i++;
         defaultText = text.slice(start, t().start).trim();
       }
       params.push({ name, type: toRef(r.type, scope), modifier, defaultText });
       if (isText(',')) i++;
       else break;
     }
-    if (isText(')')) i++;
+    if (isText(close)) i++;
     return params;
   }
 

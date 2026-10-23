@@ -3,13 +3,17 @@
  * (`@{...}`). It never throws: errors are collected and missing pieces become `missing` nodes or
  * empty names, so half-typed code still gives the binder a tree to work with.
  *
+ * Newer syntax that's common in modern C# (switch expressions, `is not null`, `new()`, ranges and
+ * so on) is recognised and reported once as needing a later C# version, since the gateway compiles
+ * policy expressions as C# 7.3. Parsing then carries on past it as best it can.
+ *
  * Ambiguities are settled the way the C# spec does: `<` after a name starts type arguments only
  * when the matching `>` is followed by a token that can follow them, and `(T)x` is a cast when `T`
  * is a predefined type or the `)` is followed by something that starts an operand.
  */
 
 import { lexAll, PREDEFINED_TYPES, type Token, type Trivia } from './lexer';
-import type { Argument, ArgumentList, Block, CatchClause, Declarator, Designation, Expr, Initializer, LambdaParam, LiteralKind, NamePart, Span, Stmt, SwitchSection, SyntaxError, TypeNode } from './syntax';
+import type { Argument, ArgumentList, Block, CatchClause, Declarator, Designation, Expr, FromClause, Initializer, LambdaParam, LiteralKind, LocalFunction, NamePart, QueryBody, QueryClause, Span, Stmt, SwitchSection, SyntaxError, TypeNode } from './syntax';
 
 export interface ParsedExpression {
   kind: 'expr';
@@ -53,8 +57,11 @@ export function readType(code: string, tokens: Token[], pos: number): { type: Ty
   return { type, pos: p.position, ok: p.errors.length === 0 };
 }
 
-/** Thrown by strict (speculative) parsing when the input doesn't fit. */
-class Mismatch {}
+/**
+ * Thrown by strict (speculative) parsing when the input doesn't fit. One instance, made once, so
+ * backtracking never captures a stack trace.
+ */
+class Mismatch extends Error {}
 const MISMATCH = new Mismatch();
 
 /** Tokens that may follow a type argument list in an expression (C# spec §7.6.5.2). */
@@ -88,7 +95,10 @@ class Parser {
       this.toks = lexed.tokens;
       this.trivia = lexed.trivia;
       for (const e of lexed.errors) this.errors.push(e);
-      for (const t of this.toks) if (t.error) this.errors.push({ start: t.start, end: t.end, message: t.error });
+      for (const t of this.toks) {
+        if (t.error) this.errors.push({ start: t.start, end: t.end, message: t.error });
+        else if (t.newer) this.newer(t.newer.feature, t.newer.version, t);
+      }
     }
   }
 
@@ -138,6 +148,31 @@ class Parser {
     // One error per position: cascades after the first are noise.
     if (this.errors.some((e) => e.start === at.start)) return;
     this.errors.push({ start: at.start, end: at.end, message });
+  }
+
+  /** Reports valid C# that needs a later version than the 7.3 policy expressions are compiled as. */
+  private newer(feature: string, version: string, at: Span): void {
+    if (this.errors.some((e) => e.start === at.start && e.code === 'language-version')) return;
+    // Features are named in the plural ("Ranges") or as "The x operator".
+    const verb = feature.startsWith('The ') ? 'needs' : 'need';
+    this.errors.push({ start: at.start, end: at.end, message: `${feature} ${verb} C# ${version}. Policy expressions are C# 7.3.`, code: 'language-version' });
+  }
+
+  private expectIdent(name: string): Token | undefined {
+    if (this.isIdent(this.tok, name)) return this.next();
+    this.error(`'${name}' expected.`, this.tok.kind === 'eof' ? this.errorSpan() : { start: this.prevEnd, end: this.prevEnd });
+    return undefined;
+  }
+
+  /** Skips a balanced `{...}`, `(...)` or `[...]` group starting at the cursor. */
+  private skipBalanced(): void {
+    let depth = 0;
+    do {
+      const t = this.next();
+      if (t.kind === 'eof') return;
+      if (this.is('{', t) || this.is('(', t) || this.is('[', t)) depth++;
+      else if (this.is('}', t) || this.is(')', t) || this.is(']', t)) depth--;
+    } while (depth > 0);
   }
 
   private errorSpan(): Span {
@@ -280,11 +315,22 @@ class Parser {
   // ---- expressions --------------------------------------------------------------------------
 
   expression(): Expr {
+    if (this.is('static')) {
+      const save = this.pos;
+      const kw = this.next();
+      if (this.isLambdaStart()) {
+        this.newer('Static anonymous functions', '9', kw);
+        return this.lambda();
+      }
+      this.pos = save;
+    }
     if (this.isLambdaStart()) return this.lambda();
+    if (this.isQueryStart()) return this.query();
     const left = this.conditional();
     const op = this.assignmentOp();
     if (op) {
       if (left.kind === 'missing') this.error('Expression expected.');
+      if (op.text === '??=') this.newer("The '??=' operator", '8', this.tok);
       for (let i = 0; i < op.tokens; i++) this.next();
       const right = this.expression();
       return { kind: 'assign', op: op.text, left, right, start: left.start, end: right.end };
@@ -399,6 +445,72 @@ class Parser {
   }
 
   private isPattern(operand: Expr): Expr {
+    const newer = this.newerPatternStart();
+    if (newer) return this.newerPattern(operand, newer);
+    const result = this.classicPattern(operand);
+    // `x is A or B`, `x is T { ... }`
+    if (this.isIdent(this.tok, 'and') || this.isIdent(this.tok, 'or')) return this.newerPattern(operand, { feature: "'and' and 'or' patterns", version: '9' }, result);
+    return result;
+  }
+
+  /** What kind of C# 8+ pattern starts at the cursor, if one does. */
+  private newerPatternStart(): { feature: string; version: string } | undefined {
+    if (this.isIdent(this.tok, 'not') && !this.is('.', this.peek()) && !this.is('(', this.peek())) return { feature: "'not' patterns", version: '9' };
+    if (this.is('{')) return { feature: 'Property patterns', version: '8' };
+    if (this.is('<') || this.is('>') || this.is('<=') || this.is('>=')) return { feature: 'Relational patterns', version: '9' };
+    return undefined;
+  }
+
+  /**
+   * Reads a C# 8+ pattern loosely and reports it. A trailing designation is kept, typed as the
+   * operand, so code that uses it still binds.
+   */
+  private newerPattern(operand: Expr, what: { feature: string; version: string }, first?: Expr): Expr {
+    const start = this.tok.start;
+    if (!first) this.skipPrimaryPattern();
+    let designation: Designation | undefined = first?.kind === 'is' ? first.designation : this.lastDesignation;
+    while (this.isIdent(this.tok, 'and') || this.isIdent(this.tok, 'or')) {
+      this.next();
+      this.skipPrimaryPattern();
+      designation = this.lastDesignation ?? designation;
+    }
+    this.newer(what.feature, what.version, { start: first ? operand.end : start, end: this.prevEnd });
+    this.lastDesignation = undefined;
+    return { kind: 'is', operand, type: { kind: 'var', start, end: start }, designation, start: operand.start, end: this.prevEnd };
+  }
+
+  /** Designation read by the last skipPrimaryPattern, if it ended in one. */
+  private lastDesignation: Designation | undefined;
+
+  private skipPrimaryPattern(): void {
+    this.lastDesignation = undefined;
+    if (this.isIdent(this.tok, 'not')) {
+      this.next();
+      this.skipPrimaryPattern();
+      this.lastDesignation = undefined;
+      return;
+    }
+    if (this.is('<') || this.is('>') || this.is('<=') || this.is('>=')) {
+      this.next();
+      this.binary(7);
+      return;
+    }
+    if (this.is('{') || this.is('(')) {
+      this.skipBalanced();
+    } else {
+      const t = this.tok;
+      const constant = t.kind === 'number' || t.kind === 'string' || t.kind === 'char' || this.is('null') || this.is('true') || this.is('false') || this.is('-');
+      if (constant) this.binary(7);
+      else if (!this.attempt(() => this.type())) this.binary(7);
+      if (this.is('{')) this.skipBalanced();
+    }
+    if (this.isIdent() && !['and', 'or', 'when'].includes(this.tok.text)) {
+      const d = this.next();
+      this.lastDesignation = { name: d.text, start: d.start, end: d.end };
+    }
+  }
+
+  private classicPattern(operand: Expr): Expr {
     const t = this.tok;
     const constant = t.kind === 'number' || t.kind === 'string' || t.kind === 'char' || this.is('null') || this.is('true') || this.is('false') || this.is('-');
     if (!constant) {
@@ -408,8 +520,14 @@ class Parser {
         return { kind: 'is', operand, type: { kind: 'var', start: v.start, end: v.end }, designation: { name: d.text, start: d.start, end: d.end }, start: operand.start, end: d.end };
       }
       const type = this.attempt(() => this.type()) ?? this.type();
+      if (this.is('{')) {
+        // `x is T { A: 1 } t`
+        const open = this.tok;
+        this.skipBalanced();
+        this.newer('Property patterns', '8', { start: open.start, end: this.prevEnd });
+      }
       let designation: Designation | undefined;
-      if (this.isIdent() && !this.isIdent(this.tok, 'when')) {
+      if (this.isIdent() && !['when', 'and', 'or'].includes(this.tok.text)) {
         const d = this.next();
         designation = { name: d.text, start: d.start, end: d.end };
       }
@@ -420,10 +538,40 @@ class Parser {
   }
 
   private unary(): Expr {
+    const operand = this.unaryOperand();
+    if (!this.is('..')) return operand;
+    // `a..b` (C# 8): reported, and read as its left side.
+    const dots = this.next();
+    this.newer('Ranges', '8', dots);
+    if (this.startsOperand()) this.unaryOperand();
+    return operand.kind === 'missing' ? { kind: 'missing', start: dots.start, end: this.prevEnd } : operand;
+  }
+
+  private startsOperand(): boolean {
     const t = this.tok;
+    if (t.kind === 'ident' || t.kind === 'number' || t.kind === 'string' || t.kind === 'char' || t.kind === 'interp' || t.kind === 'namedValue') return true;
+    if (t.kind === 'keyword') return OPERAND_KEYWORDS.has(t.text);
+    return t.kind === 'punct' && ['(', '!', '-', '+', '~', '^'].includes(t.text);
+  }
+
+  private unaryOperand(): Expr {
+    const t = this.tok;
+    if (this.is('..')) {
+      // `..b`
+      this.next();
+      this.newer('Ranges', '8', t);
+      if (this.startsOperand()) this.unaryOperand();
+      return { kind: 'missing', start: t.start, end: this.prevEnd };
+    }
+    if (this.is('^')) {
+      // `^1` (C# 8): reported, and read as the index itself.
+      this.next();
+      this.newer('Index-from-end expressions', '8', t);
+      return this.unaryOperand();
+    }
     if (t.kind === 'punct' && ['!', '-', '+', '~', '++', '--'].includes(t.text)) {
       this.next();
-      const operand = this.unary();
+      const operand = this.unaryOperand();
       if (operand.kind === 'missing') this.error('Expression expected.');
       return { kind: 'unary', op: t.text, operand, postfix: false, start: t.start, end: operand.end };
     }
@@ -442,7 +590,7 @@ class Parser {
         return type;
       });
       if (cast) {
-        const operand = this.unary();
+        const operand = this.unaryOperand();
         return { kind: 'cast', type: cast, operand, start: t.start, end: operand.end };
       }
     }
@@ -562,6 +710,118 @@ class Parser {
     return { kind: 'missing', start: t.start, end: t.end };
   }
 
+  // ---- query expressions --------------------------------------------------------------------
+
+  /** `from x in` or `from T x in` at the cursor. */
+  private isQueryStart(): boolean {
+    if (!this.isIdent(this.tok, 'from')) return false;
+    const n = this.peek();
+    if (this.isIdent(n) && this.is('in', this.peek(2))) return true;
+    if (!this.isIdent(n) && !(n.kind === 'keyword' && PREDEFINED_TYPES[n.text] !== undefined)) return false;
+    const save = this.pos;
+    const ok = this.attempt(() => {
+      this.next();
+      this.type();
+      if (!this.isIdent() || !this.is('in', this.peek())) throw MISMATCH;
+      return true;
+    });
+    this.pos = save;
+    return !!ok;
+  }
+
+  private query(): Expr {
+    const start = this.tok.start;
+    const from = this.fromClause();
+    const body = this.queryBody();
+    return { kind: 'query', from, body, start, end: this.prevEnd };
+  }
+
+  private fromClause(): FromClause {
+    const start = this.next().start;
+    const { type, designation } = this.rangeVariable();
+    this.expect('in');
+    const source = this.expression();
+    return { kind: 'from', type, designation, source, start, end: this.prevEnd };
+  }
+
+  private rangeVariable(): { type?: TypeNode; designation: Designation } {
+    const ident = () => {
+      const d = this.isIdent() ? this.next() : undefined;
+      if (!d) this.error('Identifier expected.');
+      return d ? { name: d.text, start: d.start, end: d.end } : { name: '', start: this.prevEnd, end: this.prevEnd };
+    };
+    if (this.isIdent() && this.is('in', this.peek())) return { designation: ident() };
+    const type = this.type();
+    return { type, designation: ident() };
+  }
+
+  private queryBody(): QueryBody {
+    const start = this.tok.start;
+    const clauses: QueryClause[] = [];
+    const designation = (): Designation => {
+      const d = this.isIdent() ? this.next() : undefined;
+      if (!d) this.error('Identifier expected.');
+      return d ? { name: d.text, start: d.start, end: d.end } : { name: '', start: this.prevEnd, end: this.prevEnd };
+    };
+    for (;;) {
+      const t = this.tok;
+      if (this.isIdent(t, 'from')) {
+        clauses.push(this.fromClause());
+      } else if (this.isIdent(t, 'let')) {
+        this.next();
+        const d = designation();
+        this.expect('=');
+        const value = this.expression();
+        clauses.push({ kind: 'let', designation: d, value, start: t.start, end: this.prevEnd });
+      } else if (this.isIdent(t, 'where')) {
+        this.next();
+        const condition = this.expression();
+        clauses.push({ kind: 'where', condition, start: t.start, end: this.prevEnd });
+      } else if (this.isIdent(t, 'join')) {
+        this.next();
+        const { type, designation: d } = this.rangeVariable();
+        this.expect('in');
+        const source = this.expression();
+        this.expectIdent('on');
+        const outerKey = this.expression();
+        this.expectIdent('equals');
+        const innerKey = this.expression();
+        const into = this.isIdent(this.tok, 'into') ? (this.next(), designation()) : undefined;
+        clauses.push({ kind: 'join', type, designation: d, source, outerKey, innerKey, into, start: t.start, end: this.prevEnd });
+      } else if (this.isIdent(t, 'orderby')) {
+        this.next();
+        const keys: Expr[] = [];
+        do {
+          keys.push(this.expression());
+          if (this.isIdent(this.tok, 'ascending') || this.isIdent(this.tok, 'descending')) this.next();
+        } while (this.eat(','));
+        clauses.push({ kind: 'orderby', keys, start: t.start, end: this.prevEnd });
+      } else break;
+    }
+    let final: QueryBody['final'];
+    const t = this.tok;
+    if (this.isIdent(t, 'select')) {
+      this.next();
+      const value = this.expression();
+      final = { kind: 'select', value, start: t.start, end: this.prevEnd };
+    } else if (this.isIdent(t, 'group')) {
+      this.next();
+      const value = this.expression();
+      this.expectIdent('by');
+      const key = this.expression();
+      final = { kind: 'group', value, key, start: t.start, end: this.prevEnd };
+    } else {
+      this.error('A query body must end with a select or group clause.');
+    }
+    let continuation: QueryBody['continuation'];
+    if (final && this.isIdent(this.tok, 'into')) {
+      this.next();
+      const d = designation();
+      continuation = { designation: d, body: this.queryBody() };
+    }
+    return { clauses, final, continuation, start, end: this.prevEnd };
+  }
+
   private parenOrTuple(): Expr {
     const open = this.next();
     const first = this.tupleItem();
@@ -616,6 +876,13 @@ class Parser {
       this.expect(']');
       const arrayInit = this.arrayInitializer();
       return { kind: 'new', arrayRanks: [1], arrayInit, start, end: this.prevEnd };
+    }
+    if (this.is('(')) {
+      // `new()` (C# 9): reported; the binder takes the type from the target.
+      this.newer("Target-typed 'new' expressions", '9', { start, end: this.tok.end });
+      const args = this.argumentList(')');
+      const init = this.is('{') ? this.initializer() : undefined;
+      return { kind: 'new', args, init, start, end: this.prevEnd };
     }
     const type = this.type(false);
     // new T[n] or new T[] { ... }
@@ -686,7 +953,7 @@ class Parser {
         const args = this.argumentList(']');
         this.expect('=');
         const value = this.expression();
-        members.push({ value: { kind: 'tuple', items: [...args.args.map((a) => ({ value: a.value })), { value }], start: args.start, end: value.end } });
+        members.push({ index: args, value });
       } else {
         kind ??= 'collection';
         members.push({ value: this.is('{') ? this.nestedArrayInit() : this.expression() });
@@ -719,6 +986,16 @@ class Parser {
       } else if (this.is('++') || this.is('--')) {
         this.next();
         expr = { kind: 'unary', op: t.text, operand: expr, postfix: true, start: expr.start, end: t.end };
+      } else if (this.is('!')) {
+        // `x!` (C# 8). A prefix `!` can't follow an operand, so this is the only reading.
+        this.next();
+        this.newer('The null-forgiving operator', '8', t);
+      } else if (this.is('switch') && this.is('{', this.peek())) {
+        // `x switch { ... }` (C# 8): reported and skipped.
+        this.next();
+        this.skipBalanced();
+        this.newer('Switch expressions', '8', { start: t.start, end: this.prevEnd });
+        expr = { kind: 'missing', start: expr.start, end: this.prevEnd };
       } else {
         return expr;
       }
@@ -860,18 +1137,29 @@ class Parser {
         }
         case 'switch':
           return this.switchStatement();
+        case 'checked':
+        case 'unchecked':
+          if (this.is('{', this.peek())) {
+            // `unchecked { ... }`: overflow checking doesn't affect binding, so it's just a block.
+            this.next();
+            const b = this.block();
+            return { ...b, start: t.start };
+          }
+          break;
         case 'try':
           return this.tryStatement();
         case 'using':
-        case 'lock': {
-          this.next();
-          this.expect('(');
-          const resource: Stmt = t.text === 'using' ? (this.localDeclaration(false) ?? this.exprStatementNoSemicolon()) : this.exprStatementNoSemicolon();
-          this.expect(')');
-          const body = this.embedded();
-          if (t.text === 'lock') return { kind: 'lock', value: (resource as { expr: Expr }).expr, body, start: t.start, end: body.end };
-          return { kind: 'using', resource, body, start: t.start, end: body.end };
-        }
+          if (!this.is('(', this.peek())) {
+            // `using var x = ...;` (C# 8)
+            this.next();
+            const decl = this.localDeclaration(true);
+            this.newer('Using declarations', '8', { start: t.start, end: decl?.start ?? t.end });
+            if (decl) return { ...decl, start: t.start };
+            break;
+          }
+          return this.usingOrLock(t);
+        case 'lock':
+          return this.usingOrLock(t);
         case 'const': {
           this.next();
           const decl = this.localDeclaration(true);
@@ -880,6 +1168,8 @@ class Parser {
         }
       }
     }
+    const fn = this.localFunction();
+    if (fn) return fn;
     const local = this.localDeclaration(true);
     if (local) return local;
     const expr = this.expression();
@@ -889,6 +1179,72 @@ class Parser {
     }
     this.expect(';');
     return { kind: 'expr', expr, start: expr.start, end: this.prevEnd };
+  }
+
+  private usingOrLock(t: Token): Stmt {
+    this.next();
+    this.expect('(');
+    const resource: Stmt = t.text === 'using' ? (this.localDeclaration(false) ?? this.exprStatementNoSemicolon()) : this.exprStatementNoSemicolon();
+    this.expect(')');
+    const body = this.embedded();
+    if (t.text === 'lock') return { kind: 'lock', value: (resource as { expr: Expr }).expr, body, start: t.start, end: body.end };
+    return { kind: 'using', resource, body, start: t.start, end: body.end };
+  }
+
+  /** `[static] T Name<U>(params) => expr;` or `{ ... }`, if one starts here. */
+  private localFunction(): LocalFunction | undefined {
+    const start = this.tok.start;
+    const header = this.attempt(() => {
+      const isStatic = this.is('static') ? this.next() : undefined;
+      if (this.isIdent(this.tok, 'var')) throw MISMATCH;
+      const returnType = this.type();
+      if (!this.isIdent()) throw MISMATCH;
+      const id = this.next();
+      const typeParams: Designation[] = [];
+      if (this.eat('<')) {
+        do {
+          if (!this.isIdent()) throw MISMATCH;
+          const p = this.next();
+          typeParams.push({ name: p.text, start: p.start, end: p.end });
+        } while (this.eat(','));
+        if (!this.eat('>')) throw MISMATCH;
+      }
+      if (!this.is('(')) throw MISMATCH;
+      return { isStatic, returnType, id, typeParams };
+    });
+    if (!header) return undefined;
+    if (header.isStatic) this.newer('Static local functions', '8', header.isStatic);
+    this.next(); // (
+    const params: LocalFunction['params'] = [];
+    if (!this.is(')')) {
+      do {
+        const pStart = this.tok.start;
+        const isParams = !!this.eat('params');
+        const modifier = this.is('out') || this.is('ref') || this.is('in') ? (this.next().text as LambdaParam['modifier']) : undefined;
+        const type = this.type();
+        const id = this.isIdent() ? this.next() : undefined;
+        if (!id) this.error('Identifier expected.');
+        const defaultValue = this.eat('=') ? this.expression() : undefined;
+        params.push({ name: id?.text ?? '', type, modifier, isParams, defaultValue, start: pStart, end: this.prevEnd });
+      } while (this.eat(','));
+    }
+    this.expect(')');
+    // Constraints (`where T : class`) don't affect binding here; skip them.
+    while (this.isIdent(this.tok, 'where')) {
+      while (!this.atEnd() && !this.is('{') && !this.is('=>')) this.next();
+    }
+    let body: Expr | Block;
+    if (this.eat('=>')) {
+      body = this.expression();
+      this.expect(';');
+    } else if (this.is('{')) {
+      body = this.block();
+    } else {
+      this.error("'{' or '=>' expected.");
+      body = this.missing();
+    }
+    const { returnType, id, typeParams } = header;
+    return { kind: 'localFunction', name: id.text, nameSpan: { start: id.start, end: id.end }, typeParams, returnType, params, body, start, end: this.prevEnd };
   }
 
   private exprStatementNoSemicolon(): Stmt {
@@ -902,7 +1258,7 @@ class Parser {
     const type = this.attempt(() => {
       if (this.isIdent(this.tok, 'var') && this.isIdent(this.peek())) {
         const v = this.next();
-        return { kind: 'var', start: v.start, end: v.end } as TypeNode;
+        return { kind: 'var' as const, start: v.start, end: v.end };
       }
       const ty = this.type();
       if (!this.isIdent()) throw MISMATCH;
@@ -1018,6 +1374,23 @@ class Parser {
   }
 
   private caseLabel(): SwitchSection['labels'][number] {
+    const newer = this.newerPatternStart();
+    if (newer) {
+      const start = this.tok.start;
+      this.skipPrimaryPattern();
+      while (this.isIdent(this.tok, 'and') || this.isIdent(this.tok, 'or')) {
+        this.next();
+        this.skipPrimaryPattern();
+      }
+      this.newer(newer.feature, newer.version, { start, end: this.prevEnd });
+      const label: SwitchSection['labels'][number] = { kind: 'case', type: { kind: 'var', start, end: start }, designation: this.lastDesignation };
+      this.lastDesignation = undefined;
+      if (this.isIdent(this.tok, 'when')) {
+        this.next();
+        label.when = this.expression();
+      }
+      return label;
+    }
     const typed = this.attempt(() => {
       const tStart = this.tok.start;
       const type: TypeNode = this.isIdent(this.tok, 'var') ? { kind: 'var', start: tStart, end: this.next().end } : this.type();
@@ -1028,6 +1401,15 @@ class Parser {
     let label: SwitchSection['labels'][number];
     if (typed) label = { kind: 'case', ...typed };
     else label = { kind: 'case', value: this.coalesce() };
+    if (this.isIdent(this.tok, 'and') || this.isIdent(this.tok, 'or')) {
+      const start = this.tok.start;
+      while (this.isIdent(this.tok, 'and') || this.isIdent(this.tok, 'or')) {
+        this.next();
+        this.skipPrimaryPattern();
+      }
+      this.newer("'and' and 'or' patterns", '9', { start, end: this.prevEnd });
+      this.lastDesignation = undefined;
+    }
     if (this.isIdent(this.tok, 'when')) {
       this.next();
       label.when = this.expression();

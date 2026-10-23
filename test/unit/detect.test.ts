@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { looksLikePolicy, rootElementName } from '../../src/parser/detect';
+import { looksLikePolicy, rootElementName, scanRoot } from '../../src/parser/detect';
 
 describe('looksLikePolicy', () => {
   it.each([
@@ -21,6 +21,19 @@ describe('rootElementName', () => {
   it('gives up on unterminated prologue and non-markup', () => {
     expect(rootElementName('<!-- never closed')).toBeUndefined();
     expect(rootElementName('hello')).toBeUndefined();
+  });
+
+  it('finds the root past a header longer than 4 KB', () => {
+    const header = `<!--\n${'    @property {string} x  A line of header.\n'.repeat(200)}-->\n`;
+    expect(header.length).toBeGreaterThan(4096);
+    expect(looksLikePolicy(`${header}<fragment />`)).toBe(true);
+  });
+
+  it('says when the text ran out inside the prologue', () => {
+    expect(scanRoot('<!-- still going')).toEqual({ more: true });
+    expect(scanRoot('<!-- done --> <fragment>')).toEqual({ name: 'fragment', more: false });
+    expect(scanRoot('hello').more).toBe(false);
+    expect(scanRoot('<!-- long', 4).more).toBe(false);
   });
 
   it('stays fast on files that start with many comments', () => {

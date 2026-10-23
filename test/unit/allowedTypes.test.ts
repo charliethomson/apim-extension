@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Allowlist, lintAllowedTypes, lintReferences, type AllowlistData, type BclIndex } from '../../src/csharp/allowedTypes';
+import type { RawModel } from '../../src/csharp/lang/model';
 import { CSharpEngine } from '../../src/csharp/lang/service';
 import { readStubs } from '../../src/csharp/lang/stubs';
 import { parse } from '../../src/parser/scanner';
@@ -113,14 +114,13 @@ describe('lintAllowedTypes: restricted members', () => {
 describe('lintAllowedTypes on fixtures', () => {
   const findings = (file: string) => parse(read(`test/fixtures/${file}`)).expressions.flatMap((e) => lintAllowedTypes(e.code, allow).map((f) => f.name));
 
-  it.each(['raw/echo.policy.xml', 'escaped/echo.policy.xml', 'apiops/apis/random-users/policy.xml'])('%s has no findings', (file) => {
+  it.each(['raw/echo.policy.xml', 'escaped/echo.policy.xml', 'apiops/apis/random-users/policy.xml', 'apiops/policyFragments/random-user/policy.xml'])('%s has no findings', (file) => {
     expect(findings(file)).toEqual([]);
   });
 
-  // Func<> delegates, IComparable and UriKind aren't in the documented allowlist.
+  // Func<> delegates aren't in the documented allowlist.
   it('flags the types the fixtures use outside the allowlist', () => {
     expect(findings('raw/tricky.policy.xml')).toEqual(['System.Func']);
-    expect(findings('apiops/policyFragments/random-user-pipeline/policy.xml').sort()).toEqual(['System.Func', 'System.Func', 'System.IComparable', 'System.UriKind']);
   });
 });
 
@@ -129,7 +129,7 @@ it('flags delegate types, which the allowlist leaves out', () => {
 });
 
 describe('lintReferences (built-in engine semantic pass)', () => {
-  const engine = CSharpEngine.load(JSON.parse(read('data/csharp-model.json')), read('stubs/ApimContext.cs'));
+  const engine = CSharpEngine.load(JSON.parse(read('data/csharp-model.json')) as RawModel, read('stubs/ApimContext.cs'));
   const lint = (code: string, kind: 'expr' | 'block' = 'expr') => lintReferences(engine.references(code, kind), allow).map((f) => `${code.slice(f.range.start, f.range.end)}: ${f.name}`);
 
   it('flags restricted instance members whose receiver type is never written', () => {
@@ -142,5 +142,12 @@ describe('lintReferences (built-in engine semantic pass)', () => {
     expect(lint('new XmlDocument().InnerXml')).toEqual(['XmlDocument: System.Xml.XmlDocument']);
     expect(lint('context.Request.Headers.GetValueOrDefault("a", "").AsJwt()?.Subject')).toEqual([]);
     expect(lint('JObject.Parse("{}")["a"].ToString() + DateTime.UtcNow.Year')).toEqual([]);
+  });
+
+  it('flags a type that is only inferred when one of its members is used, once', () => {
+    // The gateway rejects `g.Key` on GroupBy's IGrouping though the code never names the type.
+    expect(lint('new[] { "a" }.GroupBy(s => s.Length).Select(g => g.Key + g.Key).ToList()')).toEqual(['Key: System.Linq.IGrouping']);
+    expect(lint('new[] { "a" }.GroupBy(s => s.Length).Select(g => g.Count()).ToList()')).toEqual([]);
+    expect(lint('new[] { "a" }.OrderBy(s => s).ThenBy(s => s.Length).ToString()')).toEqual([]);
   });
 });
