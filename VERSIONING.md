@@ -4,7 +4,8 @@ The version is derived from git and never stored: `MAJOR.MINOR.<total commit cou
 `MAJOR.MINOR` comes from the latest `vMAJOR.MINOR` tag, and the commit count makes it
 monotonic. Full doctrine: [versioning](https://standards.thmsn.dev/d/versioning).
 
-- `package.json` `version` is a placeholder (`0.0.1`). Don't bump it.
+- `extension/package.json` `version` is a placeholder (`0.0.1`). Don't bump it; the packages'
+  `0.0.0` likewise.
 - [`scripts/ci/version.sh`](scripts/ci/version.sh) prints `RELEASE_VERSION`, `COMMIT` and
   `DIRTY` for `eval`. It honours a `RELEASE_VERSION` CI already computed, and refuses a shallow
   clone or a missing tag instead of guessing.

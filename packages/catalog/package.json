@@ -1,0 +1,22 @@
+{
+  "name": "@apim-policy/catalog",
+  "version": "0.0.0",
+  "private": true,
+  "description": "What APIM accepts: the policy catalog, structural validation and XML completion.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@apim-policy/core": "*",
+    "@apim-policy/document": "*"
+  },
+  "devDependencies": {
+    "@apim-policy/fixtures": "*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  }
+}

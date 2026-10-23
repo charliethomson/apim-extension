@@ -1,0 +1,17 @@
+{
+  "name": "@apim-policy/bench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Timings for the hot paths: parsing, the engine, the lints.",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "bench": "esbuild hotpaths.ts --bundle --platform=node --sourcemap --outfile=../out/bench/hotpaths.js --log-level=warning && node --expose-gc --enable-source-maps ../out/bench/hotpaths.js"
+  },
+  "devDependencies": {
+    "@apim-policy/analysis": "*",
+    "@apim-policy/catalog": "*",
+    "@apim-policy/csharp-engine": "*",
+    "@apim-policy/document": "*"
+  }
+}

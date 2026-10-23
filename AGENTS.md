@@ -34,16 +34,21 @@ versioning and ignore the Rust-specific parts.
 - **Language:** TypeScript bundled with esbuild, not Rust. The Rust conventions,
   `libbuildinfo`, `product_name!`, tarpaulin and the Docker/Komodo templates don't apply, except
   that the `.kiln/` crate follows the Rust conventions.
-- **Artifact:** a `.vsix` built with `@vscode/vsce`, not a registry `kind = cli` binary.
-  `package.json` `version` stays a placeholder (`0.0.1`). `npm run package` derives
+- **Layout:** an npm workspace shaped like a Rust product workspace. Libraries in `packages/*`
+  (`@apim-policy/<name>`, private, `0.0.0`, exporting `src/index.ts` with no build step) play the
+  crates' part, and `extension/` is the one deliverable. Dependencies point one way (README's
+  Layout table), only `extension/` imports `vscode`, and `npm run lint` enforces both plus
+  declared-only, exports-only imports between packages. A new package declares its workspace
+  deps in its `package.json` and gets a row in the README table.
+- **Artifact:** a `.vsix` built with `@vscode/vsce` from `extension/`, not a registry `kind = cli`
+  binary. `extension/package.json` `version` stays a placeholder (`0.0.1`). `npm run package` derives
   `MAJOR.MINOR.<count>` with `scripts/ci/version.sh` and passes it to vsce, so the installed
   extension reports the real version.
 - **Identifier:** the VS Code extension id is `thmsn-dev.apim-policy` (marketplace form
   `publisher.name`). `dev.thmsn.apim-policy` is used anywhere a reverse-domain id fits.
-- **Testing:** unit tests run on vitest. The coverage floor of 80% applies to `src/parser/`,
-  `src/sourceMap.ts`, `src/policy/` and the pure modules in `src/csharp/` (see
-  `vitest.config.ts`), which is the logic surface.
-  The VS Code glue in `src/extension.ts` and `src/features/` is wiring, and it's covered by
+- **Testing:** unit tests run on vitest, per package. Every package under `packages/` has the 80%
+  coverage floor (`vitest.shared.ts`), met by its own tests, so a contract is tested in the
+  package that owns it. The VS Code glue in `extension/src/` is wiring, and it's covered by
   `@vscode/test-electron` integration tests instead.
 - **CI is kiln.** The pipelines are Rust in [`.kiln/`](.kiln/src/main.rs) (kiln, plus libci's
   `version`, `audit` and `secrets`); `.woodpecker/*.yml` is generated from it and never edited by
@@ -53,9 +58,9 @@ versioning and ignore the Rust-specific parts.
   `cargo run --manifest-path .kiln/Cargo.toml -- check` validates them, and the `repo.checks`
   pipeline fails when `.woodpecker/` or the lockfile is stale. `emit` never deletes: a pipeline
   dropped from `main.rs` needs its `.yml` deleted by hand.
-  - `extension.ci`: typecheck, lint, unit tests with coverage, packaging and the integration suite
-    in one job; the stubs build and the generated-data drift check (.NET SDK 10.0.103, cached) in
-    another. `audit.ci`: libci's `AuditGate` over `npm audit`, with `audit-exceptions.json`.
+  - `extension.ci`: typecheck, lint, every package's unit tests with coverage, packaging and the
+    integration suite in one job. `engine.ci`: on `packages/csharp-engine` changes, the stubs
+    build and the generated-assets drift check (.NET SDK 10.0.103, cached). `audit.ci`: libci's `AuditGate` over `npm audit`, with `audit-exceptions.json`.
     `extension.release`: publishes to the Visual Studio Marketplace on `v*` tags or by hand.
   - **Push-only.** `.kiln/` depends on the private kiln and libci, so jobs fetch them with the
     `ssh_key` checkout key, and kiln refuses pull-request triggers on such a repo. Changes are

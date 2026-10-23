@@ -5,8 +5,8 @@
       "name": "Run Extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "${workspaceFolder}/test/fixtures"],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/extension", "${workspaceFolder}/packages/fixtures/files"],
+      "outFiles": ["${workspaceFolder}/extension/dist/**/*.js"],
       "preLaunchTask": "build"
     }
   ]

@@ -1,0 +1,25 @@
+{
+  "name": "@apim-policy/analysis",
+  "version": "0.0.0",
+  "private": true,
+  "description": "What a policy does: variables, fragment headers, variable safety, scope chains, JSON shapes, formatting and docs.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@apim-policy/catalog": "*",
+    "@apim-policy/core": "*",
+    "@apim-policy/csharp-engine": "*",
+    "@apim-policy/csharp-lexer": "*",
+    "@apim-policy/document": "*"
+  },
+  "devDependencies": {
+    "@apim-policy/fixtures": "*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  }
+}

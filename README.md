@@ -29,7 +29,7 @@ npm run package
 ```
 
 ```bash
-code --install-extension apim-policy-*.vsix
+code --install-extension extension/apim-policy-*.vsix
 ```
 
 Releases are published to the Visual Studio Marketplace by the `extension.release` pipeline
@@ -113,7 +113,7 @@ policy.xml ──► tolerant parser ──► elements, attributes, expressions
            ┌──────────────────────────┼──────────────────────────┐
            ▼                          ▼                          ▼
    policy catalog              C# engine                  workspace index
-   (data/policies.json)        (data/csharp-model.json)   (fragments, variables,
+   (@apim-policy/catalog)      (@apim-policy/csharp-engine) (fragments, variables,
    → diagnostics, XML          → completion, hover,        named values; with an
      completion, hover           signatures, errors       instance, its too)
                                                           → navigation, known names
@@ -123,21 +123,21 @@ policy.xml ──► tolerant parser ──► elements, attributes, expressions
   owns the input until the balanced close, so `"`, `<` and `&&` inside an expression can't break
   the XML structure. The lexer reads an entity-decoded view, so `&quot;)&quot;` in the escaped
   format behaves like `")"` in rawxml. Each expression carries a source map back to the file.
-- **Catalog.** `data/policies.json` lists each policy's allowed sections, attributes (required,
+- **Catalog.** `packages/catalog/data/policies.json` lists each policy's allowed sections, attributes (required,
   enum, expression-capable) and child elements. Validation and XML completion are driven
   entirely by it.
-- **C# engine.** `src/csharp/lang/` lexes and parses C# 7.3 tolerantly, then binds names,
-  overloads, generics and lambda types against `data/csharp-model.json` (the allowlisted BCL and
+- **C# engine.** `packages/csharp-engine` lexes and parses C# 7.3 tolerantly, then binds names,
+  overloads, generics and lambda types against `assets/csharp-model.json` (the allowlisted BCL and
   Newtonsoft surface, flagged where .NET Framework 4.8 lacks a member) and the stubs. One walk
   with the cursor offset answers completion, hover or signature help. What the model can't see
   binds to an unknown type that converts to anything, so gaps never become errors.
 - **Allowlist.** Expressions are checked against APIM's documented type allowlist
-  (`data/allowed-types.json`), syntactically and from what the engine bound. Completion hides
+  (`packages/csharp-engine/assets/allowed-types.json`), syntactically and from what the engine bound. Completion hides
   what it forbids.
 - **Gateway compatibility.** The gateway compiles C# 7.3 against .NET Framework types, so newer
   syntax (switch expressions, `is not`, `new()`, `x!`, …) and .NET Core-only members are flagged.
-- **Instance.** `src/apim/` reads an instance over the Resource Manager REST API with VS Code's
-  Microsoft sign-in (no Azure SDK), lazily and cached in memory. `src/policy/scopes.ts` works out
+- **Instance.** `packages/azure` reads an instance over the Resource Manager REST API with VS Code's
+  Microsoft sign-in (no Azure SDK), lazily and cached in memory. `scopes.ts` in `packages/analysis` works out
   what the broader scopes set: a broader policy runs at the inner one's `<base />`, so its
   variables count from there on, and an API in several products only gets what every product's
   chain sets.
@@ -201,28 +201,33 @@ policy.xml ──► tolerant parser ──► elements, attributes, expressions
 
 ## Layout
 
+An npm workspace. The libraries under `packages/` don't import `vscode`, so each one tests on its
+own; `extension/` wires them to the editor. Dependencies point one way, top to bottom:
+
+| Package | Role | Depends on |
+|---|---|---|
+| [`packages/core`](packages/core) | offsets and source maps, APIM scope identity, the path conventions that name scopes and fragments | nothing |
+| [`packages/csharp-lexer`](packages/csharp-lexer) | the structural C# lexer: where an expression ends, tokens for the syntactic lints | core |
+| [`packages/csharp-engine`](packages/csharp-engine) | the C# 7.3 engine: lexer, parser, type model, binder, JSON shapes, stub reader, allowlist lint; its `assets/` (type model, BCL index, allowlist, stubs), the `tools/` that generate them and `stubs-check/` | core, csharp-lexer |
+| [`packages/document`](packages/document) | the tolerant policy parser: XML scanner, AST, entities, position queries, rawxml/xml detection | core, csharp-lexer |
+| [`packages/catalog`](packages/catalog) | what APIM accepts: `data/policies.json`, structural validation, XML completion | core, document |
+| [`packages/analysis`](packages/analysis) | what a policy does: variables, fragment headers, variable safety, scope chains, JSON shapes, formatting, docs | core, csharp-lexer, csharp-engine, document, catalog |
+| [`packages/azure`](packages/azure) | the Resource Manager client, the instance reader, the push format | core, document |
+| [`packages/fixtures`](packages/fixtures) | sample policies the suites share (test-only) | nothing |
+| [`extension/`](extension) | the `.vsix`: manifest, providers, grammars, snippets, the integration suite | everything |
+| [`bench/`](bench) | hot-path benchmarks | the packages it times |
+
+Each package has `src/index.ts` as its public surface and its tests in `test/`. Around them:
+
 ```
-src/parser/     tolerant parser, C# lexer, entity decoding, position queries
-src/policy/     catalog types, validator, XML completion, variable analysis, scopes
-src/apim/       Resource Manager client and the instance reader
-src/csharp/     allowlist lint
-src/csharp/lang/  C# engine: lexer, parser, type model, stub reader, binder, editor features
-src/features/   VS Code providers that wire the above to the editor
-src/sourceMap.ts  offset maps from decoded expression code back to the file
-data/           policy catalog, allowlist, generated BCL type index and C# type model
-stubs/          C# stubs for context and APIM's helper methods (shipped, read at runtime)
-syntaxes/       TextMate grammar and the C# injection
-snippets/       policy snippets
-tools/          generators for data/bcl-types.json and data/csharp-model.json
-test/unit/      vitest suites; test/fixtures/ holds the sample policies
-test/integration/  VS Code end-to-end suite
-test/stubs/     a tiny project that compiles the stubs at C# 7.3
-bench/          hot-path benchmarks
-docs/           the fragment header format, known limitations, development gotchas
+docs/           the user guide, reference, fragment header format, known limitations
 scripts/ci/     version derivation for `npm run package`
 .kiln/          the CI pipelines, as Rust (kiln)
 .woodpecker/    generated from .kiln/ by `emit woodpecker`; never edited by hand
 ```
+
+`npm run lint` enforces the boundaries npm can't: a package imports another only when its
+`package.json` declares it, only through its exports, and only the extension imports `vscode`.
 
 ## Development
 
@@ -247,22 +252,32 @@ npm test
 npm run test:integration
 ```
 
+Each package's suite runs on its own too, from its directory or with `-w`:
+
 ```bash
-dotnet build test/stubs
+npm test -w @apim-policy/csharp-engine
 ```
 
-CI also packages the `.vsix` and checks that regenerating `data/*.json` with the .NET 10.0.103
-SDK changes nothing. `audit.ci` runs `npm audit` on lockfile changes and weekly, and only fails
+CI also packages the `.vsix`. `engine.ci` runs when `packages/csharp-engine` changes: it builds
+the stubs at C# 7.3 and checks that regenerating the engine's assets with the .NET 10.0.103 SDK
+changes nothing:
+
+```bash
+dotnet build packages/csharp-engine/stubs-check
+```
+
+ `audit.ci` runs `npm audit` on lockfile changes and weekly, and only fails
 on a critical advisory that [`audit-exceptions.json`](audit-exceptions.json) has no live
-exception for. Exceptions need a reason and an expiry date, and an expired one fails it. The
-coverage floor (80%, in `vitest.config.ts`) covers the parser, source maps, policy logic, the
-allowlist lint and the engine. The VS Code glue in `src/features/` is covered by the integration
-suite instead, which runs with every other extension disabled.
+exception for. Exceptions need a reason and an expiry date, and an expired one fails it. Every
+package under `packages/` has its own 80% coverage floor (`vitest.shared.ts`), met by its own
+tests. The VS Code glue in `extension/src/` is covered by the integration suite instead, which
+runs with every other extension disabled.
 
 The unit tests run in milliseconds. The integration suite downloads VS Code into `.vscode-test/`
-on first run, then runs on a temporary copy of `test/fixtures/`. Set
+on first run, then runs on a temporary copy of `packages/fixtures/files/`. Set
 `APIM_DEBUG=1` to mirror the extension's log to the console. To try the extension by hand, use
-**Run Extension** from VS Code or `code --extensionDevelopmentPath=.` on a folder of policies.
+**Run Extension** from VS Code or `code --extensionDevelopmentPath=extension` on a folder of
+policies (after `npm run build`).
 
 CI doesn't run the bench; run it yourself when touching the hot paths:
 
@@ -274,10 +289,10 @@ It times startup, the work after an edit and the editor requests. The extension 
 usable on slow machines with on-access file scanning, so keep these flat, and keep file I/O
 down: nothing runs until a policy opens, each workspace policy is read once, nothing is written.
 
-`data/bcl-types.json` and `data/csharp-model.json` are generated from the installed .NET reference
-assemblies and their doc files. The model generator also restores Microsoft's .NET Framework 4.8
-reference assemblies from NuGet to flag what Framework lacks. Regenerate both after changing the
-allowlist:
+The engine's `assets/bcl-types.json` and `assets/csharp-model.json` are generated from the
+installed .NET reference assemblies and their doc files. The model generator also restores
+Microsoft's .NET Framework 4.8 reference assemblies from NuGet to flag what Framework lacks.
+Regenerate both after changing the allowlist, from `packages/csharp-engine`:
 
 ```bash
 dotnet run tools/gen-bcl-types.cs
@@ -287,17 +302,17 @@ dotnet run tools/gen-bcl-types.cs
 dotnet run tools/gen-csharp-model.cs
 ```
 
-`data/policies.json` and `data/allowed-types.json` are hand-maintained from the Learn policy
-reference and the policy expressions page.
+`packages/catalog/data/policies.json` and `packages/csharp-engine/assets/allowed-types.json` are
+hand-maintained from the Learn policy reference and the policy expressions page.
 
 ## Licence and attribution
 
-The code is MIT licensed ([LICENSE](LICENSE)). The policy catalog (`data/policies.json`), the
-allowlist (`data/allowed-types.json`) and the doc comments in `stubs/ApimContext.cs` are
+The code is MIT licensed ([LICENSE](LICENSE)). The policy catalog (`policies.json`), the
+allowlist (`allowed-types.json`) and the doc comments in `ApimContext.cs` are
 paraphrased from the [Azure API Management documentation](https://learn.microsoft.com/azure/api-management/)
 ([MicrosoftDocs/azure-docs](https://github.com/MicrosoftDocs/azure-docs), CC BY 4.0). They aren't
-affiliated with or endorsed by Microsoft. The grammars in `test/grammars/` are MIT-licensed copies
-used only by the tests; see [their notice](test/grammars/NOTICE).
+affiliated with or endorsed by Microsoft. The grammars in `extension/test/grammars/` are
+MIT-licensed copies used only by the tests; see [their notice](extension/test/grammars/NOTICE).
 
 ## Docs
 
@@ -310,7 +325,7 @@ used only by the tests; see [their notice](test/grammars/NOTICE).
   when working on it.
 - [PLAN.md](PLAN.md): the original design, including the C# extension approach it replaced.
 - [VERSIONING.md](VERSIONING.md): how the version is derived.
-- [test/stubs/README.md](test/stubs/README.md): the stubs compile check.
+- [packages/csharp-engine/stubs-check/README.md](packages/csharp-engine/stubs-check/README.md): the stubs compile check.
 - [SHORTCUTS.md](SHORTCUTS.md): operational shortcuts (what's published, what's running).
 
 Conventions: [`AGENTS.md`](AGENTS.md), whose `Standards:` line names the archetype; the rules

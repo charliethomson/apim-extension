@@ -59,7 +59,7 @@ _Verified: 2026-10-23_
 
 The first line of the **APIM Policy** output channel (View → Output) once a policy is open:
 `apim-policy <version> (<commit>[, dirty])`. A dev build (Run Extension) reports the
-`package.json` placeholder `0.0.1`; a packaged build reports the derived version.
+`extension/package.json` placeholder `0.0.1`; a packaged build reports the derived version.
 
 _Verified: 2026-10-23_
 

@@ -1,19 +1,4 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "bundler",
-    "lib": ["ES2022"],
-    "types": ["node", "mocha"],
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "noEmit": true
-  },
-  "include": ["src", "test/unit", "test/integration", "bench", "vitest.config.ts"]
+  "extends": "./tsconfig.base.json",
+  "include": ["vitest.config.ts", "vitest.shared.ts"]
 }

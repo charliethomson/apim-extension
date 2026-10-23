@@ -1,0 +1,19 @@
+{
+  "name": "@apim-policy/azure",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Azure Resource Manager client, the instance reader and the push format.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@apim-policy/core": "*",
+    "@apim-policy/document": "*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  }
+}

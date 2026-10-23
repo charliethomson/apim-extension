@@ -1,16 +1,11 @@
 //! `extension.ci`, the gate, and `extension.release`, the Marketplace publish.
 
 use kiln::prelude::*;
-use kiln::recipes::git::Drift;
 use kiln::recipes::node::Npm;
 use libci::version::Version;
 
 use super::{IMAGE, apt, ensure_node};
 use crate::VscePat;
-
-/// The .NET SDK the stubs build and the generators run on. Pinned exactly because a different
-/// reference pack can change `data/*.json`, and the drift check would then fail on nothing.
-const DOTNET_SDK: &str = "10.0.103";
 
 /// What VS Code's Electron links against, plus a virtual display for it to draw on.
 const ELECTRON_LIBS: &[&str] = &[
@@ -29,26 +24,19 @@ const ELECTRON_LIBS: &[&str] = &[
     "libxshmfence1",
 ];
 
-/// Everything the extension, its tests and its generated data are built from.
+/// Everything the extension and its packages are built and tested from.
 const SOURCES: &[&str] = &[
-    "src/**",
-    "test/**",
+    "packages/**",
+    "extension/**",
     "bench/**",
-    "data/**",
-    "stubs/**",
-    "syntaxes/**",
-    "snippets/**",
-    "images/**",
-    "tools/**",
     "scripts/ci/**",
     "package.json",
     "package-lock.json",
-    "esbuild.mjs",
     "eslint.config.mjs",
+    "tsconfig.base.json",
     "tsconfig.json",
     "vitest.config.ts",
-    "language-configuration.json",
-    ".vscodeignore",
+    "vitest.shared.ts",
     ".kiln/src/pipelines/extension.rs",
     ".kiln/src/pipelines/mod.rs",
     ".kiln/src/main.rs",
@@ -56,12 +44,11 @@ const SOURCES: &[&str] = &[
     ".kiln/Cargo.lock",
 ];
 
-/// `extension.ci`: typecheck, lint, unit tests with the coverage floor, packaging and the
-/// integration suite in VS Code; beside it, the stubs compile check and the generated-data drift
-/// check.
+/// `extension.ci`: typecheck, lint, every package's unit tests with its coverage floor, packaging
+/// and the integration suite in VS Code. The C# engine's .NET checks are `engine.ci`.
 pub fn ci() -> Pipeline {
     Pipeline::new("extension.ci")
-        .describe("typecheck · lint · unit tests · package · stubs · generated data · integration")
+        .describe("typecheck · lint · unit tests · package · integration")
         .on(Push::to("main").paths(SOURCES.iter().copied()))
         .on(Manual)
         .serialize(Always::cancel())
@@ -80,22 +67,6 @@ pub fn ci() -> Pipeline {
                 // as the container's PID 1.
                 ctx.run("sh", ["-c", "Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp >/dev/null 2>&1 &"]).call()?;
                 ctx.run("npm", ["run", "test:integration"]).env("DISPLAY", ":99").call().map(drop)
-            })
-        })
-        .job("dotnet", |j| {
-            j.on(Linux).image(IMAGE).cache(dotnet_cache()).run(|ctx| {
-                let dotnet = install_dotnet(ctx)?;
-                ctx.step("stubs compile at C# 7.3", |ctx| ctx.run(&dotnet, ["build", "test/stubs"]).call().map(drop))?;
-                Drift::check()
-                    .named("generated data")
-                    .paths(["data"])
-                    .generator(format!(
-                        "dotnet run tools/gen-bcl-types.cs && dotnet run tools/gen-csharp-model.cs (SDK {DOTNET_SDK})"
-                    ))
-                    .regenerate(ctx, |ctx| {
-                        ctx.run(&dotnet, ["run", "tools/gen-bcl-types.cs"]).call()?;
-                        ctx.run(&dotnet, ["run", "tools/gen-csharp-model.cs"]).call().map(drop)
-                    })
             })
         })
 }
@@ -140,29 +111,6 @@ fn package(ctx: &Ctx) -> Result<String> {
     let v = Version::derive(ctx)?;
     ctx.info(format!("packaging apim-policy {}", v.release_version()));
     ctx.run("npm", ["run", "package"]).env("RELEASE_VERSION", v.release_version()).call()?;
-    Ok(format!("apim-policy-{}.vsix", v.release_version()))
-}
-
-fn dotnet_cache() -> Cache {
-    Cache::named("dotnet-sdk").max_gb(2)
-}
-
-/// The pinned SDK, installed into the job's cache unless it's already there. Returns the
-/// `dotnet` binary.
-fn install_dotnet(ctx: &Ctx) -> Result<String> {
-    let root = ctx.cache_dir(dotnet_cache())?.join(DOTNET_SDK);
-    let dotnet = root.join("dotnet").to_string();
-    if ctx.exists(&dotnet) {
-        return Ok(dotnet);
-    }
-    ctx.step("install .NET SDK", |ctx| {
-        // The SDK's runtime needs ICU, which the toolchain image (buildpack-deps) already carries.
-        ctx.run("mkdir", ["-p", root.as_str()]).call()?;
-        let script = root.join("dotnet-install.sh");
-        ctx.run("curl", ["-fsSL", "https://dot.net/v1/dotnet-install.sh", "-o"]).arg(script.as_str()).call()?;
-        ctx.run("bash", [script.as_str(), "--version", DOTNET_SDK, "--install-dir", root.as_str(), "--no-path"])
-            .call()
-            .map(drop)
-    })?;
-    Ok(dotnet)
+    // vsce writes it beside the extension's own package.json.
+    Ok(format!("extension/apim-policy-{}.vsix", v.release_version()))
 }

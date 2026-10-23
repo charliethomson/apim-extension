@@ -4,7 +4,7 @@ A tour of the extension by task. The [README](../README.md) has install and sett
 [reference](reference.md) lists every command, setting and quick fix, and
 [fragment headers](fragment-headers.md) is the full header format.
 
-To see most of it at once, open `test/fixtures/apiops/` from this repo: the `random-user`
+To see most of it at once, open `packages/fixtures/files/apiops/` from this repo: the `random-user`
 fragment has a complete header with typedefs, and `apis/random-users/policy.xml` calls it.
 
 ## Getting a file recognised

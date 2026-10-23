@@ -1,0 +1,13 @@
+{
+  "name": "@apim-policy/fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Policy files the test suites share.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

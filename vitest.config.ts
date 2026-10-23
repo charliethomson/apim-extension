@@ -1,12 +1,5 @@
 import { defineConfig } from 'vitest/config';
 
-export default defineConfig({
-  test: {
-    include: ['test/unit/**/*.test.ts'],
-    coverage: {
-      provider: 'v8',
-      include: ['src/parser/**', 'src/sourceMap.ts', 'src/policy/**', 'src/apim/**', 'src/csharp/allowedTypes.ts', 'src/csharp/lang/**'],
-      thresholds: { lines: 80, branches: 80, functions: 80, statements: 80 },
-    },
-  },
-});
+// `npx vitest` from the root runs every package's suite; `npm run test:coverage` runs each
+// package on its own so each gets its own coverage floor.
+export default defineConfig({ test: { projects: ['packages/*', 'extension'] } });

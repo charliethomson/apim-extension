@@ -32,6 +32,7 @@ fn main() -> kiln::Result<()> {
         .secrets(KILN_SECRETS)
         // ── Gates ──────────────────────────────────────────────────────────────
         .pipeline(pipelines::extension::ci())
+        .pipeline(pipelines::engine::ci())
         .pipeline(pipelines::audit::ci())
         .pipeline(pipelines::repo::checks())
         // ── Delivery ───────────────────────────────────────────────────────────

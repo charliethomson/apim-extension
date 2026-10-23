@@ -1,0 +1,457 @@
+{
+  "name": "apim-policy",
+  "displayName": "Azure APIM Policies",
+  "description": "Editor support for Azure API Management policy files: tolerant parsing, structural diagnostics and C# IntelliSense inside policy expressions.",
+  "version": "0.0.1",
+  "publisher": "thmsn-dev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/charliethomson/apim-extension"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "azure",
+    "apim",
+    "api management",
+    "policy",
+    "policies"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:xml",
+    "onLanguage:apim-policy",
+    "onFileSystem:apim-instance",
+    "onFileSystem:apim-edit"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In Restricted Mode, a workspace can't turn on pushing to an instance (apimPolicy.publish.allowedInstances); everything else works.",
+      "restrictedConfigurations": [
+        "apimPolicy.publish.allowedInstances"
+      ]
+    },
+    "virtualWorkspaces": true
+  },
+  "contributes": {
+    "configurationDefaults": {
+      "[apim-policy]": {
+        "editor.wordBasedSuggestions": "off"
+      }
+    },
+    "languages": [
+      {
+        "id": "apim-policy",
+        "aliases": [
+          "APIM Policy",
+          "apim-policy"
+        ],
+        "filenamePatterns": [
+          "*.policy.xml"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "apim-policy",
+        "scopeName": "text.xml.apim",
+        "path": "./syntaxes/apim-policy.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.expression.cs": "csharp",
+          "meta.embedded.block.cs": "csharp"
+        },
+        "tokenTypes": {
+          "meta.embedded.expression.cs": "other",
+          "meta.embedded.block.cs": "other",
+          "meta.embedded.expression.cs string": "string",
+          "meta.embedded.block.cs string": "string",
+          "meta.embedded.expression.cs comment": "comment",
+          "meta.embedded.block.cs comment": "comment"
+        },
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational.cs",
+          "keyword.operator.arrow.cs",
+          "punctuation.accessor.pointer.cs",
+          "keyword.operator.bitwise.shift.cs",
+          "keyword.operator.assignment.compound.bitwise.cs",
+          "keyword.operator.comparison.cs",
+          "keyword.operator.logical.cs"
+        ]
+      },
+      {
+        "scopeName": "apim.expression.injection",
+        "path": "./syntaxes/apim-expression.injection.json",
+        "injectTo": [
+          "text.xml.apim"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.expression.cs": "csharp",
+          "meta.embedded.block.cs": "csharp"
+        },
+        "tokenTypes": {
+          "meta.embedded.expression.cs": "other",
+          "meta.embedded.block.cs": "other",
+          "meta.embedded.expression.cs string": "string",
+          "meta.embedded.block.cs string": "string",
+          "meta.embedded.expression.cs comment": "comment",
+          "meta.embedded.block.cs comment": "comment"
+        },
+        "unbalancedBracketScopes": [
+          "keyword.operator.relational.cs",
+          "keyword.operator.arrow.cs",
+          "punctuation.accessor.pointer.cs",
+          "keyword.operator.bitwise.shift.cs",
+          "keyword.operator.assignment.compound.bitwise.cs",
+          "keyword.operator.comparison.cs",
+          "keyword.operator.logical.cs"
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "APIM Policy",
+      "properties": {
+        "apimPolicy.files.include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra glob patterns for XML files that are APIM policies, for example `**/policies/**/*.xml`. `*.policy.xml` is always included."
+        },
+        "apimPolicy.files.detectByContent": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Treat an `.xml` file as an APIM policy when its root element is `<policies>` or `<fragment>`. Covers the APIOps `policy.xml` layout."
+        },
+        "apimPolicy.csharp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "C# IntelliSense and type checking inside policy expressions, from the built-in C# engine."
+        },
+        "apimPolicy.lint.unguardedVariableAccess": {
+          "type": "string",
+          "enum": [
+            "off",
+            "information",
+            "warning"
+          ],
+          "default": "off",
+          "markdownDescription": "Flag `context.Variables[\"x\"]` where `x` may be unset, which throws `KeyNotFoundException` at run time. Reads are fine when an earlier `set-variable` or include sets `x`, when it's a required `@in` of the fragment, or when a `ContainsKey(\"x\")` check guards them. The quick fix rewrites the read to `GetValueOrDefault<T>(\"x\")`."
+        },
+        "apimPolicy.lint.missingInput": {
+          "type": "string",
+          "enum": [
+            "warning",
+            "information",
+            "off"
+          ],
+          "default": "warning",
+          "markdownDescription": "Severity for an `include-fragment` whose required `@in` nothing earlier sets. Use `information` where broader scopes (product, global) set them and no instance is connected to show it."
+        },
+        "apimPolicy.allowedTypes.severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "information",
+            "off"
+          ],
+          "default": "error",
+          "markdownDescription": "Severity for .NET types and members that APIM doesn't allow in policy expressions; the gateway refuses to save a policy that uses one. Members .NET Framework 4.8 lacks are warnings unless this is set explicitly."
+        },
+        "apimPolicy.instance": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "An API Management instance to read from, as its ARM resource ID (`/subscriptions/…/resourceGroups/…/providers/Microsoft.ApiManagement/service/…`). Its fragments, named values, backends and broader-scope policies then join in completion, hover and the checks. Read-only and kept in memory only; secret named values are never read. Set it with **APIM: Connect to an Instance**."
+        },
+        "apimPolicy.tenant": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "The Microsoft Entra tenant (directory) the instance is in, when it isn't your account's default. Learned from Azure when unset."
+        },
+        "apimPolicy.armEndpoint": {
+          "type": "string",
+          "default": "https://management.azure.com",
+          "markdownDescription": "The Azure Resource Manager endpoint, for sovereign clouds."
+        },
+        "apimPolicy.instanceCacheMinutes": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "markdownDescription": "How long what's read from the instance is reused before it's read again. **APIM: Refresh Instance** reads it again now."
+        },
+        "apimPolicy.publish.allowedInstances": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Instances (ARM resource IDs) that **APIM: Push Policy to Instance** may write to. Empty by default, so pushing is off. Add only instances you change by hand, not ones a pipeline deploys. The push command offers to add the connected instance."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "apimPolicy.selectInstance",
+        "title": "Connect to an Instance",
+        "category": "APIM",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "apimPolicy.refreshInstance",
+        "title": "Refresh Instance",
+        "category": "APIM",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "apimPolicy.signIn",
+        "title": "Sign In to Azure",
+        "category": "APIM"
+      },
+      {
+        "command": "apimPolicy.openInstancePolicy",
+        "title": "Open a Policy from the Instance",
+        "category": "APIM"
+      },
+      {
+        "command": "apimPolicy.setPolicyScope",
+        "title": "Set This Policy's Scope",
+        "category": "APIM"
+      },
+      {
+        "command": "apimPolicy.useAsScope",
+        "title": "Use as This Policy's Scope",
+        "category": "APIM"
+      },
+      {
+        "command": "apimPolicy.copyNamedValue",
+        "title": "Copy Reference",
+        "category": "APIM",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "apimPolicy.openScope",
+        "title": "Open Policy",
+        "category": "APIM"
+      },
+      {
+        "command": "apimPolicy.pushPolicy",
+        "title": "Push to Instance",
+        "category": "APIM",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "apimPolicy.openEditable",
+        "title": "Open as Editable",
+        "category": "APIM",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "apimPolicy.confirmPush",
+        "title": "Push These Changes",
+        "category": "APIM",
+        "icon": "$(check)"
+      },
+      {
+        "command": "apimPolicy.cancelPush",
+        "title": "Cancel Push",
+        "category": "APIM",
+        "icon": "$(close)"
+      },
+      {
+        "command": "apimPolicy.reloadFromInstance",
+        "title": "Reload from Instance",
+        "category": "APIM",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "apimPolicy.generateDocs",
+        "title": "Generate Docs",
+        "category": "APIM",
+        "icon": "$(book)"
+      },
+      {
+        "command": "apimPolicy.writeDocs",
+        "title": "Write Fragment Docs",
+        "category": "APIM"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "apimPolicy",
+          "title": "API Management",
+          "icon": "images/apim-activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "apimPolicy": [
+        {
+          "id": "apimPolicy.instance",
+          "name": "Instance",
+          "icon": "images/apim-activity.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "apimPolicy.instance",
+        "contents": "Connect an API Management instance to browse its policies, fragments, named values and backends, and to use them while you edit.\n[Connect to an Instance](command:apimPolicy.selectInstance)",
+        "when": "!apimPolicy.instanceState || apimPolicy.instanceState == none"
+      },
+      {
+        "view": "apimPolicy.instance",
+        "contents": "Signed out of Azure.\n[Sign In](command:apimPolicy.signIn)",
+        "when": "apimPolicy.instanceState == signedOut"
+      },
+      {
+        "view": "apimPolicy.instance",
+        "contents": "Couldn't read the instance. The APIM Policy output has the details.\n[Retry](command:apimPolicy.refreshInstance)\n[Connect to Another Instance](command:apimPolicy.selectInstance)",
+        "when": "apimPolicy.instanceState == error"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "apimPolicy.setPolicyScope",
+          "when": "editorLangId == apim-policy"
+        },
+        {
+          "command": "apimPolicy.useAsScope",
+          "when": "false"
+        },
+        {
+          "command": "apimPolicy.copyNamedValue",
+          "when": "false"
+        },
+        {
+          "command": "apimPolicy.openScope",
+          "when": "false"
+        },
+        {
+          "command": "apimPolicy.openEditable",
+          "when": "apimPolicy.instanceState == ok"
+        },
+        {
+          "command": "apimPolicy.pushPolicy",
+          "when": "editorLangId == apim-policy && resourceScheme =~ /^(file|apim-edit)$/ && apimPolicy.instanceState && apimPolicy.instanceState != none"
+        },
+        {
+          "command": "apimPolicy.confirmPush",
+          "when": "apimPolicy.reviewingPush"
+        },
+        {
+          "command": "apimPolicy.cancelPush",
+          "when": "apimPolicy.reviewingPush"
+        },
+        {
+          "command": "apimPolicy.reloadFromInstance",
+          "when": "resourceScheme == apim-edit"
+        },
+        {
+          "command": "apimPolicy.generateDocs",
+          "when": "editorLangId == apim-policy"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "apimPolicy.refreshInstance",
+          "when": "view == apimPolicy.instance && apimPolicy.instanceState && apimPolicy.instanceState != none",
+          "group": "navigation@1"
+        },
+        {
+          "command": "apimPolicy.selectInstance",
+          "when": "view == apimPolicy.instance",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "apimPolicy.copyNamedValue",
+          "when": "view == apimPolicy.instance && viewItem == namedValue",
+          "group": "inline"
+        },
+        {
+          "command": "apimPolicy.copyNamedValue",
+          "when": "view == apimPolicy.instance && viewItem == namedValue"
+        },
+        {
+          "command": "apimPolicy.useAsScope",
+          "when": "view == apimPolicy.instance && viewItem =~ /^scope/"
+        },
+        {
+          "command": "apimPolicy.openEditable",
+          "when": "view == apimPolicy.instance && viewItem =~ /^(scope|fragment)/",
+          "group": "1_open@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "apimPolicy.confirmPush",
+          "when": "isInDiffEditor && apimPolicy.reviewingPush && resourceScheme =~ /^(file|apim-edit)$/",
+          "group": "navigation@0"
+        },
+        {
+          "command": "apimPolicy.cancelPush",
+          "when": "isInDiffEditor && apimPolicy.reviewingPush && resourceScheme =~ /^(file|apim-edit)$/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "apimPolicy.pushPolicy",
+          "when": "!isInDiffEditor && editorLangId == apim-policy && ((resourceScheme == file && apimPolicy.canPush) || resourceScheme == apim-edit)",
+          "group": "navigation@2"
+        },
+        {
+          "command": "apimPolicy.reloadFromInstance",
+          "when": "!isInDiffEditor && resourceScheme == apim-edit",
+          "group": "navigation@3"
+        },
+        {
+          "command": "apimPolicy.openEditable",
+          "when": "resourceScheme == apim-instance",
+          "group": "navigation"
+        }
+      ]
+    },
+    "snippets": [
+      {
+        "language": "apim-policy",
+        "path": "./snippets/apim-policy.code-snippets"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run",
+    "test:integration": "node esbuild.mjs && node esbuild.mjs --tests && node out/test/integration/runTest.js",
+    "package": "eval \"$(../scripts/ci/version.sh)\" && export RELEASE_VERSION COMMIT DIRTY && node esbuild.mjs --production && vsce package --no-update-package-json --no-dependencies \"$RELEASE_VERSION\""
+  },
+  "devDependencies": {
+    "@apim-policy/analysis": "*",
+    "@apim-policy/azure": "*",
+    "@apim-policy/catalog": "*",
+    "@apim-policy/core": "*",
+    "@apim-policy/csharp-engine": "*",
+    "@apim-policy/document": "*",
+    "@apim-policy/fixtures": "*",
+    "@types/mocha": "^10.0.10",
+    "@types/vscode": "~1.95.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "mocha": "^11.8.0",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}

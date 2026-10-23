@@ -1,0 +1,22 @@
+{
+  "name": "@apim-policy/document",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The tolerant policy document parser: XML scanner, AST, entities, queries and format detection.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@apim-policy/core": "*",
+    "@apim-policy/csharp-lexer": "*"
+  },
+  "devDependencies": {
+    "@apim-policy/fixtures": "*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  }
+}

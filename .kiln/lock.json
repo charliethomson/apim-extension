@@ -3,13 +3,13 @@
   "repo": "apim-extension",
   "checkoutKey": "ssh_key",
   "stats": {
-    "pipelineCount": 4,
-    "pipelineSourceLines": 439
+    "pipelineCount": 5,
+    "pipelineSourceLines": 454
   },
   "pipelines": [
     {
       "name": "extension.ci",
-      "description": "typecheck · lint · unit tests · package · stubs · generated data · integration",
+      "description": "typecheck · lint · unit tests · package · integration",
       "triggers": [
         {
           "event": "push",
@@ -17,24 +17,17 @@
             "main"
           ],
           "paths": [
-            "src/**",
-            "test/**",
+            "packages/**",
+            "extension/**",
             "bench/**",
-            "data/**",
-            "stubs/**",
-            "syntaxes/**",
-            "snippets/**",
-            "images/**",
-            "tools/**",
             "scripts/ci/**",
             "package.json",
             "package-lock.json",
-            "esbuild.mjs",
             "eslint.config.mjs",
+            "tsconfig.base.json",
             "tsconfig.json",
             "vitest.config.ts",
-            "language-configuration.json",
-            ".vscodeignore",
+            "vitest.shared.ts",
             ".kiln/src/pipelines/extension.rs",
             ".kiln/src/pipelines/mod.rs",
             ".kiln/src/main.rs",
@@ -58,7 +51,32 @@
           "caches": [
             "node:npm-modules"
           ]
+        }
+      ]
+    },
+    {
+      "name": "engine.ci",
+      "description": "stubs compile at C# 7.3 · generated assets",
+      "triggers": [
+        {
+          "event": "push",
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "packages/csharp-engine/**",
+            ".kiln/src/pipelines/engine.rs",
+            ".kiln/src/**",
+            ".kiln/Cargo.toml",
+            ".kiln/Cargo.lock"
+          ]
         },
+        {
+          "event": "manual"
+        }
+      ],
+      "serialize": "cancel",
+      "jobs": [
         {
           "name": "dotnet",
           "agent": "linux",

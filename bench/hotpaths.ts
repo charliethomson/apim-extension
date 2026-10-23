@@ -8,15 +8,10 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Allowlist, lintAllowedTypes, lintReferences, type AllowlistData, type BclIndex } from '../src/csharp/allowedTypes';
-import { TypeModel, type RawModel } from '../src/csharp/lang/model';
-import { CSharpEngine } from '../src/csharp/lang/service';
-import { readStubs } from '../src/csharp/lang/stubs';
-import { parse } from '../src/parser/scanner';
-import { catalog } from '../src/policy/catalog';
-import { resultTypes } from '../src/policy/resultTypes';
-import { validate } from '../src/policy/validator';
-import { summarize } from '../src/policy/variables';
+import { Allowlist, type AllowlistData, type BclIndex, CSharpEngine, lintAllowedTypes, lintReferences, type RawModel, readStubs, TypeModel } from '@apim-policy/csharp-engine';
+import { parse } from '@apim-policy/document';
+import { catalog, validate } from '@apim-policy/catalog';
+import { resultTypes, summarize } from '@apim-policy/analysis';
 
 // ---- harness ----------------------------------------------------------------------------------
 
@@ -58,13 +53,13 @@ process.on('beforeExit', () => {
 
 // ---- setup --------------------------------------------------------------------------------------
 
-// Run from the repo root.
-const root = process.cwd();
-const read = (p: string) => readFileSync(join(root, p), 'utf8');
-const modelText = read('data/csharp-model.json');
-const stubs = read('stubs/ApimContext.cs');
-const allowData = JSON.parse(read('data/allowed-types.json')) as AllowlistData;
-const bcl = JSON.parse(read('data/bcl-types.json')) as BclIndex;
+// `npm run bench` runs from bench/; the bundle in out/ can't find the assets by its own path.
+const assets = join(process.cwd(), '..', 'packages', 'csharp-engine', 'assets');
+const read = (name: string) => readFileSync(join(assets, name), 'utf8');
+const modelText = read('csharp-model.json');
+const stubs = read('ApimContext.cs');
+const allowData = JSON.parse(read('allowed-types.json')) as AllowlistData;
+const bcl = JSON.parse(read('bcl-types.json')) as BclIndex;
 
 const raw = JSON.parse(modelText) as RawModel;
 const engine = CSharpEngine.load(raw, stubs);
@@ -155,7 +150,7 @@ if (!filter) {
 }
 
 describe('startup (once per window, when the first policy opens)', () => {
-  bench('parse data/csharp-model.json', () => {
+  bench('parse csharp-model.json', () => {
     JSON.parse(modelText);
   });
   bench('build the type model and read the stubs', () => {

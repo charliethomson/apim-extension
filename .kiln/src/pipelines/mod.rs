@@ -1,6 +1,7 @@
 //! One module per pipeline, plus what they share.
 
 pub mod audit;
+pub mod engine;
 pub mod extension;
 pub mod repo;
 
