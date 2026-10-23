@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../../src/parser/scanner';
-import { chainsFor, instancePath, outerVariables, scopeFromInstancePath, scopeFromPath, scopeKey, scopeLabel, type Scope } from '../../src/policy/scopes';
+import { chainsFor, outerVariables } from '../../src/policy/scopes';
+import { instancePath, scopeFromInstancePath, scopeFromPath, scopeKey, scopeLabel, type Scope } from '../../src/scope';
 
 describe('scopeFromPath', () => {
   it('reads the APIOps layout', () => {

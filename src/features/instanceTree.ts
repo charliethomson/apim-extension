@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Api, Backend, NamedValue, Product } from '../apim/instance';
 import { LANGUAGE_ID } from '../documents';
-import { scopeLabel, type Scope } from '../policy/scopes';
+import { scopeLabel, type Scope } from '../scope';
 import type { InstanceConnection } from './instance';
 
 type Node =

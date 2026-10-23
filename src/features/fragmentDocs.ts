@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
-import { nodeAt } from '../parser/query';
+import { expressionAt, nodeAt } from '../parser/query';
 import { checkFragmentHeader, checkIncludes, checkInternalUse, inputUse, propertiesOfTypeText, type TypedefDoc, type FragmentDoc, type FragmentProblem, type FragmentVariable, type IncludedFragment } from '../policy/fragmentDoc';
 import { draftModel, headerExpansions, inferredTypes, insertTag, insertTypedefs, readHeaderComment, renderHeader, tabStops, type HeaderEntry, type HeaderModel } from '../policy/headerShape';
 import { typeNameFor, type GeneratedTypedefs } from '../policy/shapes';
 import type { Document } from '../parser/ast';
 import { fragmentIdsFor } from '../parser/fragmentIds';
-import { scopeFromInstancePath } from '../policy/scopes';
+import { scopeFromInstancePath } from '../scope';
 import { emptyValueFor, outputsNotAlwaysSet, unguardedReads } from '../policy/variableSafety';
-import { escapeForDocument, expressionAt, isEscapedFormat, summarize, type PolicySummary } from '../policy/variables';
+import { summarize, type PolicySummary } from '../policy/variables';
+import { escapeForDocument, isEscapedFormat } from '../parser/escaping';
 import type { PolicyIndex } from './policyIndex';
 import type { ShapeService } from './shapes';
 

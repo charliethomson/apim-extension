@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { LANGUAGE_ID, type DocumentCache } from '../documents';
 import { fragmentIdsFor } from '../parser/fragmentIds';
 import { fragmentMarkdown, GENERATED_MARKER, policyMarkdown, type DocContext } from '../policy/docs';
-import { scopeFromInstancePath, scopeLabel } from '../policy/scopes';
+import { scopeFromInstancePath, scopeLabel } from '../scope';
 import { summarize } from '../policy/variables';
 import type { InstanceConnection } from './instance';
 import type { PolicyIndex } from './policyIndex';

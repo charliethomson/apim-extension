@@ -5,7 +5,7 @@ import { gatewayErrors, pushFormat, samePolicy } from '../apim/push';
 import { LANGUAGE_ID, type DocumentCache } from '../documents';
 import { fragmentIdsFor } from '../parser/fragmentIds';
 import { parse } from '../parser/scanner';
-import { scopeFromInstancePath, scopeLabel, type Scope } from '../policy/scopes';
+import { scopeFromInstancePath, scopeLabel, type Scope } from '../scope';
 import { summarize } from '../policy/variables';
 import type { InstanceConnection } from './instance';
 

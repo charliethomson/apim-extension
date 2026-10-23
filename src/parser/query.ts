@@ -54,3 +54,8 @@ export function nodeAt(doc: Document, offset: number): Hit {
   visit(doc.children);
   return hit;
 }
+
+/** The expression whose code contains document offset `offset` (end-inclusive). */
+export function expressionAt(doc: Document, offset: number): Expression | undefined {
+  return doc.expressions.find((e) => offset >= e.codeRange.start && offset <= e.codeRange.end);
+}

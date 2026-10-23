@@ -5,7 +5,8 @@ import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import { log } from '../log';
 import type { Document, Node } from '../parser/ast';
 import { parse } from '../parser/scanner';
-import { chainsFor, instancePath, outerVariables, scopeFromInstancePath, scopeFromPath, scopeLabel, type IncludeSets, type OuterSet, type Scope } from '../policy/scopes';
+import { chainsFor, outerVariables, type IncludeSets, type OuterSet } from '../policy/scopes';
+import { instancePath, scopeFromInstancePath, scopeFromPath, scopeLabel, type Scope } from '../scope';
 import { summarize, type PolicySummary } from '../policy/variables';
 
 /** Read-only documents for what lives on the instance, at the paths `instancePath` gives. */

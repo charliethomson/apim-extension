@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from '../../src/parser/scanner';
-import { escapeForDocument, isEscapedFormat, keyAccessAt, knownVariables, summarize } from '../../src/policy/variables';
+import { keyAccessAt, knownVariables, summarize } from '../../src/policy/variables';
+import { escapeForDocument, isEscapedFormat } from '../../src/parser/escaping';
 
 const fixture = (p: string) => readFileSync(join(__dirname, '..', 'fixtures', p), 'utf8');
 

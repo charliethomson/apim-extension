@@ -8,7 +8,7 @@
  */
 
 import type { ArmClient } from './arm';
-import type { Scope } from '../policy/scopes';
+import type { Scope } from '../scope';
 
 export interface NamedValue {
   id: string;

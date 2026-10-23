@@ -23,6 +23,7 @@ import type { Document, Element, Expression, Node } from '../parser/ast';
 import type { OffsetRange } from '../sourceMap';
 import { readsIn, type FragmentDoc } from './fragmentDoc';
 import { namesVariable } from './completion';
+import type { IncludeSets } from './scopes';
 
 export interface UnguardedRead {
   name: string;
@@ -32,8 +33,6 @@ export interface UnguardedRead {
   fix?: { range: OffsetRange; code: string; expression: Expression };
 }
 
-/** What an include sets: its documented @outs, or everything it sets when it's undocumented. */
-export type IncludeSets = (fragmentId: string) => readonly string[] | undefined;
 
 export function unguardedReads(
   doc: Document,

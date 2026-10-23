@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { scopeFromInstancePath, scopeLabel, type Scope } from '../policy/scopes';
+import { scopeFromInstancePath, scopeLabel, type Scope } from '../scope';
 import { INSTANCE_SCHEME, type InstanceConnection } from './instance';
 import type { PushSupport } from './push';
 

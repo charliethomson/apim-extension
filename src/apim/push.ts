@@ -4,7 +4,7 @@
  */
 
 import type { Document } from '../parser/ast';
-import { isEscapedFormat } from '../policy/variables';
+import { isEscapedFormat } from '../parser/escaping';
 
 /**
  * `xml` for a policy written with `&quot;` in its expressions (the portal's escaped form),

@@ -6,9 +6,8 @@
  */
 
 import type { Attribute, Document, Element, Expression, Node } from '../parser/ast';
+import type { ResultType } from '../csharp/lang/service';
 import type { Catalog, ChildDef, ElementDef } from './schema';
-
-export type ResultType = 'bool' | 'variable';
 
 /** Result types for attribute expressions whose attribute has a declared type. */
 export function resultTypes(doc: Document, catalog: Catalog): Map<Expression, ResultType> {

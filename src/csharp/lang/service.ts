@@ -14,9 +14,11 @@ import type { Span } from './syntax';
 
 export type CodeKind = 'expr' | 'block';
 
-/** Result types a policy attribute can require of its expression (see policy/resultTypes.ts). */
-export type { ResultType } from '../../policy/resultTypes';
-import type { ResultType } from '../../policy/resultTypes';
+/**
+ * What an expression must produce: `bool` for bool attributes, `variable` for a `set-variable`
+ * value (one of the types a variable may hold).
+ */
+export type ResultType = 'bool' | 'variable';
 
 /** Result types the binder converts to; `variable` is checked against a list afterwards instead. */
 const RESULT_TYPES: Partial<Record<ResultType, string>> = { bool: 'System.Boolean' };
