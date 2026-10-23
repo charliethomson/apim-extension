@@ -206,14 +206,14 @@ own; `extension/` wires them to the editor. Dependencies point one way, top to b
 
 | Package | Role | Depends on |
 |---|---|---|
-| [`packages/core`](packages/core) | offsets and source maps, APIM scope identity, the path conventions that name scopes and fragments | nothing |
+| [`packages/core`](packages/core) | offsets, lines and source maps, APIM scope identity, the path conventions that name scopes and fragments | nothing |
 | [`packages/csharp-lexer`](packages/csharp-lexer) | the structural C# lexer: where an expression ends, tokens for the syntactic lints | core |
 | [`packages/csharp-engine`](packages/csharp-engine) | the C# 7.3 engine: lexer, parser, type model, binder, JSON shapes, stub reader, allowlist lint; its `assets/` (type model, BCL index, allowlist, stubs), the `tools/` that generate them and `stubs-check/` | core, csharp-lexer |
 | [`packages/document`](packages/document) | the tolerant policy parser: XML scanner, AST, entities, position queries, rawxml/xml detection | core, csharp-lexer |
 | [`packages/catalog`](packages/catalog) | what APIM accepts: `data/policies.json`, structural validation, XML completion | core, document |
-| [`packages/analysis`](packages/analysis) | what a policy does: variables, fragment headers, variable safety, scope chains, JSON shapes, formatting, docs | core, csharp-lexer, csharp-engine, document, catalog |
+| [`packages/analysis`](packages/analysis) | what a policy does: variables, fragment headers, variable safety, scope chains, JSON shapes, formatting, docs; the fragment diagnostics, include hints and the edits the header quick fixes make | core, csharp-lexer, csharp-engine, document, catalog |
 | [`packages/azure`](packages/azure) | the Resource Manager client, the instance reader, the push format | core, document |
-| [`packages/workspace`](packages/workspace) | the index of every policy file (plus the connected instance's fragments, named values and outer scopes) and the JSON shapes across them, behind a host interface the extension implements | core, document, catalog, analysis, csharp-engine, azure |
+| [`packages/workspace`](packages/workspace) | the index of every policy file (plus the connected instance's fragments, named values and outer scopes) and the JSON shapes across them, behind a host interface the extension implements; what includes declare, and the instance reader the extension's connection reads through | core, document, catalog, analysis, csharp-engine, azure |
 | [`packages/fixtures`](packages/fixtures) | sample policies the suites share (test-only) | nothing |
 | [`extension/`](extension) | the `.vsix`: manifest, providers, grammars, snippets, the integration suite | everything |
 | [`bench/`](bench) | hot-path benchmarks | the packages it times |

@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import { ApimInstance, ArmClient, ArmError, type Backend, type NamedValue, parseServiceId } from '@apim-policy/azure';
+import { ApimInstance, ArmClient, type Backend, describeError, isAllowedInstance, type NamedValue, parseServiceId } from '@apim-policy/azure';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import { log } from '../log';
-import { type Document, type Node, parse } from '@apim-policy/document';
-import { chainsFor, type IncludeSets, type OuterSet, outerVariables, summarize } from '@apim-policy/analysis';
-import { instancePath, scopeFromInstancePath, scopeFromPath, scopeLabel, type Scope } from '@apim-policy/core';
-import { EDIT_SCHEME, INSTANCE_SCHEME, type InstanceSource, type RemoteFragment } from '@apim-policy/workspace';
+import type { Document } from '@apim-policy/document';
+import type { IncludeSets, OuterSet } from '@apim-policy/analysis';
+import { instancePath, scopeLabel, type Scope } from '@apim-policy/core';
+import { documentScope, INSTANCE_SCHEME, InstanceReader, type InstanceSource, type RemoteFragment, unknownNamedValues } from '@apim-policy/workspace';
 
 const SCOPES_KEY = 'apimPolicy.scopes';
 
@@ -22,6 +22,8 @@ class NotSignedIn extends Error {}
  */
 export class InstanceConnection implements vscode.Disposable, InstanceSource<vscode.Uri> {
   private instance?: ApimInstance;
+  /** What's read from `instance`, parsed and cached. */
+  private reader?: InstanceReader<vscode.Uri>;
   private client?: ArmClient;
   /** Bumped whenever what the instance says may have changed, to invalidate derived caches. */
   private generation = 0;
@@ -33,8 +35,6 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
   readonly onDidChangeState = this.stateChanged.event;
   private readonly status = vscode.languages.createLanguageStatusItem('apimPolicy.instance', LANGUAGE_ID);
   private readonly scopeStatus = vscode.languages.createLanguageStatusItem('apimPolicy.scope', LANGUAGE_ID);
-  private readonly parsed = new Map<string, Document>();
-  private readonly outerCache = new Map<string, { doc: Document; generation: number; value: Promise<OuterSet[]> }>();
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -78,10 +78,8 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
 
   /** Whether the user has allowed pushing to the connected instance (`apimPolicy.publish.allowedInstances`). */
   get pushAllowed(): boolean {
-    const id = this.instance?.id.toLowerCase();
-    if (!id) return false;
-    const allowed = vscode.workspace.getConfiguration('apimPolicy').get<string[]>('publish.allowedInstances', []);
-    return allowed.some((a) => (parseServiceId(a)?.id ?? a).toLowerCase() === id);
+    const id = this.instance?.id;
+    return !!id && isAllowedInstance(vscode.workspace.getConfiguration('apimPolicy').get<string[]>('publish.allowedInstances', []), id);
   }
 
   /** Adds the connected instance to the workspace's allowed list. */
@@ -108,59 +106,28 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
     return this.guard(p, fallback);
   }
 
-  private summarized?: { source: Promise<unknown>; value: Promise<RemoteFragment<vscode.Uri>[]> };
-
-  /** The instance's fragments, summarised once per read of the list. */
   fragments(): Promise<RemoteFragment<vscode.Uri>[]> {
-    const i = this.instance;
-    if (!i) return Promise.resolve([]);
-    const source = i.fragments();
-    if (this.summarized?.source !== source) {
-      const value = this.guard(source, []).then((list) => list.map((f) => {
-        const doc = this.parse(f.xml);
-        return { id: f.id, description: f.description, uri: this.policyUri({ kind: 'fragment', fragment: f.id }), summary: summarize(doc), doc };
-      }));
-      this.summarized = { source, value };
-    }
-    return this.summarized.value;
+    return this.reader ? this.reader.fragments() : Promise.resolve([]);
   }
 
   async namedValues(): Promise<NamedValue[]> {
-    return this.instance ? this.guard(this.instance.namedValues(), []) : [];
+    return this.reader ? this.reader.namedValues() : [];
   }
 
   async backends(): Promise<Backend[]> {
-    return this.instance ? this.guard(this.instance.backends(), []) : [];
+    return this.reader ? this.reader.backends() : [];
   }
 
-  /** The scope a document's policy applies at: set by hand, or from its APIOps-shaped path. */
+  /** The scope a document's policy applies at: set by hand, or from its path. */
   scopeOf(uri: vscode.Uri): Scope | undefined {
-    if (uri.scheme === INSTANCE_SCHEME || uri.scheme === EDIT_SCHEME) return scopeFromInstancePath(uri.path);
-    const set = this.context.workspaceState.get<Record<string, Scope>>(SCOPES_KEY, {})[vscode.workspace.asRelativePath(uri)];
-    return set ?? scopeFromPath(uri.path, this.isExtractRoot);
+    const manual = this.context.workspaceState.get<Record<string, Scope>>(SCOPES_KEY, {})[vscode.workspace.asRelativePath(uri)];
+    return documentScope(uri.scheme, uri.path, manual, this.isExtractRoot);
   }
 
-  /** What the broader scopes set before each point of `document` (see scopes.ts in @apim-policy/analysis). */
+  /** What the broader scopes set before each point of `doc`, the policy at `uri`. */
   outerVariables(uri: vscode.Uri, doc: Document, includeSets: IncludeSets): Promise<OuterSet[]> {
-    const i = this.instance;
     const scope = this.scopeOf(uri);
-    if (!i || !scope) return Promise.resolve([]);
-    const key = uri.toString();
-    const hit = this.outerCache.get(key);
-    // The document cache makes one parse per version, so the same parse means the same text.
-    if (hit && hit.doc === doc && hit.generation === this.generation) return hit.value;
-    const value = this.guard(
-      (async () => {
-        const products = scope.kind === 'api' || scope.kind === 'operation' ? (await i.productsOf(scope.api)).map((p) => p.id) : [];
-        const chains = await Promise.all(
-          chainsFor(scope, products).map((chain) => Promise.all(chain.map(async (s) => ({ scope: s, doc: await i.policy(s).then((xml) => (xml === undefined ? undefined : this.parse(xml))) })))),
-        );
-        return outerVariables(doc, chains, includeSets);
-      })(),
-      [],
-    );
-    this.outerCache.set(key, { doc, generation: this.generation, value });
-    return value;
+    return this.reader && scope ? this.reader.outerVariables(uri.toString(), scope, doc, includeSets) : Promise.resolve([]);
   }
 
   /** The read-only document for a scope's policy on the instance. */
@@ -176,6 +143,7 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
     const raw = config.get<string>('instance', '').trim();
     const service = raw ? parseServiceId(raw) : undefined;
     this.instance = undefined;
+    this.reader = undefined;
     this.client = undefined;
     if (raw && !service) {
       this.setState({ kind: 'error', message: `apimPolicy.instance isn't an API Management resource ID: ${raw}` });
@@ -187,6 +155,7 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
         fetch: globalThis.fetch,
       });
       this.instance = new ApimInstance(this.client, service.id, Math.max(1, config.get<number>('instanceCacheMinutes', 10)) * 60_000);
+      this.reader = new InstanceReader(this.instance, (p, fallback) => this.guard(p, fallback), (scope) => this.policyUri(scope));
       this.setState({ kind: 'ok', at: new Date() });
       // Check the connection now, so the status item is right before anything asks.
       void this.guard(this.instance.namedValues(), []);
@@ -214,7 +183,7 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
 
   private invalidate(): void {
     this.generation++;
-    this.outerCache.clear();
+    this.reader?.invalidate();
     this.changed.fire();
   }
 
@@ -257,7 +226,7 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
       if (generation === this.generation) {
         if (e instanceof NotSignedIn) this.setState({ kind: 'signedOut' });
         else {
-          const message = describe(e);
+          const message = describeError(e);
           if (this.state.kind !== 'error' || this.state.message !== message) log().warn(`APIM instance: ${message}`);
           this.setState({ kind: 'error', message });
         }
@@ -310,18 +279,6 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
     this.scopeStatus.command = { title: 'Set scope', command: 'apimPolicy.setPolicyScope' };
   }
 
-  // ---- documents ------------------------------------------------------------------------------------
-
-  private parse(xml: string): Document {
-    let doc = this.parsed.get(xml);
-    if (!doc) {
-      if (this.parsed.size > 500) this.parsed.clear();
-      doc = parse(xml);
-      this.parsed.set(xml, doc);
-    }
-    return doc;
-  }
-
   // ---- commands ---------------------------------------------------------------------------------------
 
   /** A client whose tokens are for `tenant`; `prompt` lets it ask the user to sign in. */
@@ -350,7 +307,7 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
             try {
               return { tenant, subs: await listSubs(this.clientFor(tenant.tenantId, false)) };
             } catch (e) {
-              log().info(`APIM instance: couldn't list subscriptions in ${tenantName(tenant)} without signing in again: ${describe(e)}`);
+              log().info(`APIM instance: couldn't list subscriptions in ${tenantName(tenant)} without signing in again: ${describeError(e)}`);
               return { tenant, subs: undefined };
             }
           }),
@@ -393,7 +350,7 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
       await config.update('tenant', client.currentTenant ?? tenant.tenantId, target);
       await config.update('instance', svc.id, target);
     } catch (e) {
-      void vscode.window.showErrorMessage(`Couldn't list API Management services: ${describe(e)}`);
+      void vscode.window.showErrorMessage(`Couldn't list API Management services: ${describeError(e)}`);
     }
   }
 
@@ -429,7 +386,7 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
       if (!op) return undefined;
       return op.id ? { kind: 'operation', api: api.id, operation: op.id } : { kind: 'api', api: api.id };
     } catch (e) {
-      void vscode.window.showErrorMessage(`Couldn't read from ${i.name}: ${describe(e)}`);
+      void vscode.window.showErrorMessage(`Couldn't read from ${i.name}: ${describeError(e)}`);
       return undefined;
     }
   }
@@ -478,21 +435,21 @@ export function registerUnknownNamedValues(cache: DocumentCache, connection: Ins
     const version = document.version;
     const known = await connection.namedValues();
     if (document.isClosed || document.version !== version) return;
+    const unknown = unknownNamedValues(cache.get(document), known);
     // Nothing read (signed out, offline): say nothing rather than flag every name.
-    if (!known.length) {
+    if (!unknown) {
       collection.delete(document.uri);
       return;
     }
-    const names = new Set(known.map((n) => n.displayName.toLowerCase()));
-    const out: vscode.Diagnostic[] = [];
-    for (const nv of namedValueUses(cache.get(document).children)) {
-      if (names.has(nv.name.toLowerCase())) continue;
-      const d = new vscode.Diagnostic(toRange(document, nv.range), `No named value '${nv.name}' on the connected instance.`, vscode.DiagnosticSeverity.Information);
-      d.source = 'apim';
-      d.code = 'unknown-named-value';
-      out.push(d);
-    }
-    collection.set(document.uri, out);
+    collection.set(
+      document.uri,
+      unknown.map((nv) => {
+        const d = new vscode.Diagnostic(toRange(document, nv.range), `No named value '${nv.name}' on the connected instance.`, vscode.DiagnosticSeverity.Information);
+        d.source = 'apim';
+        d.code = 'unknown-named-value';
+        return d;
+      }),
+    );
   };
   const schedule = (document: vscode.TextDocument, delay = 500) => {
     const key = document.uri.toString();
@@ -513,23 +470,3 @@ export function registerUnknownNamedValues(cache: DocumentCache, connection: Ins
     { dispose: () => timers.forEach(clearTimeout) },
   );
 }
-
-function namedValueUses(nodes: readonly Node[], out: { name: string; range: { start: number; end: number } }[] = []) {
-  for (const n of nodes) {
-    if (n.type === 'text' || n.type === 'cdata') out.push(...n.namedValues);
-    if (n.type !== 'element') continue;
-    for (const a of n.attributes) out.push(...a.namedValues);
-    namedValueUses(n.children, out);
-  }
-  return out;
-}
-
-
-function describe(e: unknown): string {
-  if (e instanceof ArmError) {
-    if (e.status === 403) return `${e.message} (reading policies needs the API Management Service Reader role)`;
-    return e.message;
-  }
-  return (e as Error).message ?? String(e);
-}
-

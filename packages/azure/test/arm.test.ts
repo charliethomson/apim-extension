@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ArmClient, ArmError, parseServiceId, tenantFromChallenge, type Fetch } from '../src/arm';
+import { ArmClient, ArmError, describeError, isAllowedInstance, parseServiceId, tenantFromChallenge, type Fetch } from '../src/arm';
 import { ApimInstance } from '../src/instance';
 
 const SVC = '/subscriptions/s1/resourceGroups/rg/providers/Microsoft.ApiManagement/service/apim1';
@@ -223,5 +223,22 @@ describe('writing', () => {
     expect(created.headers['if-none-match']).toBe('*');
     expect(JSON.parse(created.body!)).toEqual({ properties: { format: 'xml', value: '<fragment />', description: 'desc' } });
     await expect(i.livePolicy({ kind: 'fragment', fragment: 'f' })).rejects.toThrow();
+  });
+});
+
+describe('telling the user what went wrong', () => {
+  it('says which role reading needs when ARM refuses, and passes other messages on', () => {
+    expect(describeError(new ArmError(403, 'AuthorizationFailed', 'Not allowed.'))).toBe('Not allowed. (reading policies needs the API Management Service Reader role)');
+    expect(describeError(new ArmError(404, 'ResourceNotFound', 'No such service.'))).toBe('No such service.');
+    expect(describeError(new Error('offline'))).toBe('offline');
+  });
+});
+
+describe('the instances pushing may write to', () => {
+  it('match a resource ID however it was written', () => {
+    const allowed = [`${SVC.toUpperCase()}/`, 'not-an-id'];
+    expect(isAllowedInstance(allowed, SVC)).toBe(true);
+    expect(isAllowedInstance(allowed, SVC.replace('apim1', 'apim2'))).toBe(false);
+    expect(isAllowedInstance(['not-an-id'], 'NOT-AN-ID')).toBe(true);
   });
 });

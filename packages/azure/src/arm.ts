@@ -208,3 +208,18 @@ export function parseServiceId(id: string): { subscription: string; resourceGrou
   if (!m) return undefined;
   return { subscription: m[1], resourceGroup: m[2], name: m[3], id: `/subscriptions/${m[1]}/resourceGroups/${m[2]}/providers/Microsoft.ApiManagement/service/${m[3]}` };
 }
+
+/** What to tell the user about a failed read; a 403 says which role reading policies needs. */
+export function describeError(e: unknown): string {
+  if (e instanceof ArmError) {
+    if (e.status === 403) return `${e.message} (reading policies needs the API Management Service Reader role)`;
+    return e.message;
+  }
+  return (e as Error).message ?? String(e);
+}
+
+/** Whether `id` is on `allowed`, a list of resource IDs as the user wrote them (any case, any slashes). */
+export function isAllowedInstance(allowed: readonly string[], id: string): boolean {
+  const want = id.toLowerCase();
+  return allowed.some((a) => (parseServiceId(a)?.id ?? a).toLowerCase() === want);
+}

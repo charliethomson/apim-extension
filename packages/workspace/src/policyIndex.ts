@@ -97,6 +97,18 @@ export class PolicyIndex<U> implements Disposable {
     return [...this.entries.values()].filter((e) => this.isFile(e.uri) && e.summary.includes.some((id) => fragmentIds.includes(id))).map((e) => ({ uri: e.uri, summary: e.summary }));
   }
 
+  /**
+   * What the files that include the fragment at `uri` read: the variables that should be its
+   * @outs. An instance copy is that fragment by the id in its path; a file, by its file name.
+   */
+  async readByCallers(uri: U): Promise<Set<string>> {
+    const path = this.host.path(uri);
+    const scope = this.isFile(uri) ? undefined : scopeFromInstancePath(path);
+    const ids = scope?.kind === 'fragment' ? [scope.fragment] : fragmentIdsFor(path);
+    const callers = await this.callers(ids);
+    return new Set(callers.flatMap((c) => c.summary.reads.map((r) => r.name)));
+  }
+
   /** The fragments in workspace files, with their parses. */
   async localFragments(): Promise<{ uri: U; ids: string[]; doc: Document }[]> {
     await this.ready;
