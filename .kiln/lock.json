@@ -3,8 +3,8 @@
   "repo": "apim-extension",
   "checkoutKey": "ssh_key",
   "stats": {
-    "pipelineCount": 6,
-    "pipelineSourceLines": 570
+    "pipelineCount": 7,
+    "pipelineSourceLines": 607
   },
   "pipelines": [
     {
@@ -65,6 +65,44 @@
           ],
           "paths": [
             "packages/csharp-engine/**",
+            ".kiln/src/pipelines/engine.rs",
+            ".kiln/src/**",
+            ".kiln/Cargo.toml",
+            ".kiln/Cargo.lock"
+          ]
+        },
+        {
+          "event": "manual"
+        }
+      ],
+      "serialize": "cancel",
+      "jobs": [
+        {
+          "name": "dotnet",
+          "agent": "linux",
+          "image": "rust:1-bookworm",
+          "caches": [
+            {
+              "key": "dotnet-sdk",
+              "maxGb": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "runner.ci",
+      "description": "policy test runner: build · tests",
+      "triggers": [
+        {
+          "event": "push",
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "runner/**",
+            "packages/csharp-engine/assets/ApimContext.cs",
+            ".kiln/src/pipelines/runner.rs",
             ".kiln/src/pipelines/engine.rs",
             ".kiln/src/**",
             ".kiln/Cargo.toml",

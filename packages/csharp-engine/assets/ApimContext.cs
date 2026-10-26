@@ -7,7 +7,8 @@
 // Microsoft only documents a few of these interface names; the rest are named here by the
 // access path they describe (context.Request -> IRequest, and so on).
 //
-// Nothing here runs: every member is abstract or throws.
+// Nothing here runs: every member is abstract or throws. The policy test runner implements the
+// interfaces and replaces the classes inside `#if !APIM_RUNNER`.
 
 #pragma warning disable CS1591
 
@@ -500,6 +501,10 @@ namespace Apim.Policies
         string Name { get; }
     }
 
+#if !APIM_RUNNER
+    // The policy test runner (runner/) defines APIM_RUNNER and brings working versions of the
+    // classes from here to the end of the file.
+
     /// <summary>Decoded credentials from a Basic authorization header.</summary>
     public sealed class BasicAuthCredentials
     {
@@ -649,4 +654,5 @@ namespace Apim.Policies
         /// <summary>The named value <paramref name="name"/>, written as {{name}} in the policy.</summary>
         public static string Get(string name) => throw null;
     }
+#endif
 }

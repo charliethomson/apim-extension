@@ -4,6 +4,7 @@ pub mod audit;
 pub mod engine;
 pub mod extension;
 pub mod repo;
+pub mod runner;
 
 use kiln::prelude::*;
 

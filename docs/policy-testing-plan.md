@@ -1,6 +1,8 @@
 # Plan: unit tests for APIM policies, in CI
 
-Status: planned (2026-10-26). Milestone 0 is built. This replaces phase 3 of
+Status: milestones 0 and 1 are built (2026-10-26): scope chains from an extract, and the runner
+core in `runner/` with the executed tier and `forward-request` answered from the test.
+[testing.md](testing.md) says what it models. Next is milestone 2, the TypeScript side. This replaces phase 3 of
 [apim-connection-plan.md](apim-connection-plan.md) with the decisions made since.
 
 APIOps publishes policy files and checks nothing about what they do. A policy's logic is only

@@ -223,6 +223,7 @@ own; `extension/` wires them to the editor. Dependencies point one way, top to b
 | [`packages/workspace`](packages/workspace) | the index of every policy file (plus the connected instance's fragments, named values and outer scopes) and the JSON shapes across them; the broader scopes read from an APIOps extract or an instance; behind a host interface the extension implements; what includes declare, and the instance reader the extension's connection reads through | core, document, catalog, analysis, csharp-engine, azure |
 | [`packages/fixtures`](packages/fixtures) | sample policies the suites share (test-only) | nothing |
 | [`extension/`](extension) | the `.vsix`: manifest, providers, grammars, snippets, the integration suite | everything |
+| [`runner/`](runner) | the policy test runner (.NET, in progress): runs a request through a policy and its broader scopes, with the C# compiled by Roslyn at 7.3 and the outside world mocked ([plan](docs/policy-testing-plan.md), [what it models](docs/testing.md)) | the engine's `ApimContext.cs` |
 | [`bench/`](bench) | hot-path benchmarks | the packages it times |
 
 Each package has `src/index.ts` as its public surface and its tests in `test/`. Around them:
@@ -274,6 +275,13 @@ changes nothing:
 
 ```bash
 dotnet build packages/csharp-engine/stubs-check
+```
+
+`runner.ci` runs when `runner/` or the engine's `ApimContext.cs` changes: it builds the policy
+test runner and runs its tests on the same SDK:
+
+```bash
+dotnet test runner/PolicyRunner.slnx
 ```
 
 `repo.checks` runs when `.kiln/` or `.woodpecker/` changes: the generated files and lockfile

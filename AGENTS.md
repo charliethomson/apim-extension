@@ -34,6 +34,10 @@ versioning and ignore the Rust-specific parts.
 - **Language:** TypeScript bundled with esbuild, not Rust. The Rust conventions,
   `libbuildinfo`, `product_name!`, tarpaulin and the Docker/Komodo templates don't apply, except
   that the `.kiln/` crate follows the Rust conventions.
+- **Layout:** `runner/` is the one .NET project outside the engine: the policy test runner
+  (`docs/policy-testing-plan.md`). It compiles the engine's `ApimContext.cs` with `APIM_RUNNER`
+  defined, which swaps the stub's throw-null helper classes for its own working ones, so a
+  change to the stubs' interfaces has to build there too.
 - **Layout:** an npm workspace shaped like a Rust product workspace. Libraries in `packages/*`
   (`@apim-policy/<name>`, private, `0.0.0`, exporting `src/index.ts` with no build step) play the
   crates' part, and `extension/` is the one deliverable. Dependencies point one way (README's
@@ -60,7 +64,8 @@ versioning and ignore the Rust-specific parts.
   dropped from `main.rs` needs its `.yml` deleted by hand.
   - `extension.ci`: typecheck, lint, every package's unit tests with coverage, packaging and the
     integration suite in one job. `engine.ci`: on `packages/csharp-engine` changes, the stubs
-    build and the generated-assets drift check (.NET SDK 10.0.103, cached). `audit.ci`: libci's `AuditGate` over `npm audit`, with `audit-exceptions.json`.
+    build and the generated-assets drift check (.NET SDK 10.0.103, cached). `runner.ci`: on `runner/`
+    or `ApimContext.cs` changes, the policy test runner's build and xunit tests on the same SDK. `audit.ci`: libci's `AuditGate` over `npm audit`, with `audit-exceptions.json`.
     `repo.checks`: `.woodpecker/` and the lockfile match a fresh emit, and `.kiln/` passes
     `cargo fmt --check` and clippy pedantic (`[lints]` in `.kiln/Cargo.toml`) with `-D warnings`.
     `extension.release`: publishes to the Visual Studio Marketplace on `v*` tags or by hand.

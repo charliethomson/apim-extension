@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="PolicyRunner/PolicyRunner.csproj" />
+  <Project Path="PolicyRunner.Tests/PolicyRunner.Tests.csproj" />
+</Solution>
