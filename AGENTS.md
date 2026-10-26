@@ -64,6 +64,8 @@ versioning and ignore the Rust-specific parts.
     `repo.checks`: `.woodpecker/` and the lockfile match a fresh emit, and `.kiln/` passes
     `cargo fmt --check` and clippy pedantic (`[lints]` in `.kiln/Cargo.toml`) with `-D warnings`.
     `extension.release`: publishes to the Visual Studio Marketplace on `v*` tags or by hand.
+    `extension.prerelease`: publishes each push to `main` that touches the extension as a
+    Marketplace pre-release, skipping a commit that carries a `v*` tag.
   - **Push-only.** `.kiln/` depends on the private kiln and libci, so jobs fetch them with the
     `ssh_key` checkout key, and kiln refuses pull-request triggers on such a repo. Changes are
     gated when they land on `main`.

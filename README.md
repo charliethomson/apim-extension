@@ -33,7 +33,9 @@ code --install-extension extension/apim-policy-*.vsix
 ```
 
 Releases are published to the Visual Studio Marketplace by the `extension.release` pipeline
-when a `v*` tag is pushed (see [VERSIONING.md](VERSIONING.md)).
+when a `v*` tag is pushed, and every push to `main` that changes the extension goes out as a
+pre-release by `extension.prerelease` (see [VERSIONING.md](VERSIONING.md)). To get those, choose
+**Switch to Pre-Release Version** on the extension's page in VS Code.
 
 Nothing else is needed: the C# engine ships with the extension, works offline and in Restricted
 Mode, and doesn't use the C# extension even when it's installed.

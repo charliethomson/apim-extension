@@ -3,8 +3,8 @@
   "repo": "apim-extension",
   "checkoutKey": "ssh_key",
   "stats": {
-    "pipelineCount": 5,
-    "pipelineSourceLines": 493
+    "pipelineCount": 6,
+    "pipelineSourceLines": 570
   },
   "pipelines": [
     {
@@ -148,6 +148,53 @@
           "name": "kiln",
           "agent": "linux",
           "image": "rust:1-bookworm"
+        }
+      ]
+    },
+    {
+      "name": "extension.prerelease",
+      "description": "test, package and publish main as a Marketplace pre-release",
+      "triggers": [
+        {
+          "event": "push",
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "packages/**",
+            "extension/**",
+            "bench/**",
+            "scripts/ci/**",
+            "package.json",
+            "package-lock.json",
+            "eslint.config.mjs",
+            "tsconfig.base.json",
+            "tsconfig.json",
+            "vitest.config.mts",
+            "vitest.shared.mts",
+            ".kiln/src/pipelines/extension.rs",
+            ".kiln/src/pipelines/mod.rs",
+            ".kiln/src/main.rs",
+            ".kiln/Cargo.toml",
+            ".kiln/Cargo.lock"
+          ]
+        }
+      ],
+      "serialize": "cancel",
+      "jobs": [
+        {
+          "name": "publish",
+          "agent": "linux",
+          "image": "rust:1-bookworm",
+          "env": {
+            "CI": "true"
+          },
+          "caches": [
+            "node:npm-modules"
+          ],
+          "secrets": [
+            "vsce_pat"
+          ]
         }
       ]
     },

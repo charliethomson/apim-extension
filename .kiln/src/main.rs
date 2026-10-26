@@ -36,6 +36,7 @@ fn main() -> kiln::Result<()> {
         .pipeline(pipelines::audit::ci())
         .pipeline(pipelines::repo::checks())
         // ── Delivery ───────────────────────────────────────────────────────────
+        .pipeline(pipelines::extension::prerelease())
         .pipeline(pipelines::extension::release())
         .main()
 }

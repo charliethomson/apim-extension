@@ -12,8 +12,13 @@ monotonic. Full doctrine: [versioning](https://standards.thmsn.dev/d/versioning)
 - `npm run package` passes that version to vsce and the commit to the bundle, so the `.vsix`
   and the installed extension report the version, and the extension's output channel logs
   both on startup.
-- In CI, `extension.release` derives it with libci's `Version::derive` and hands it to
-  `npm run package` as `RELEASE_VERSION`.
+- In CI, `extension.release` and `extension.prerelease` derive it with libci's
+  `Version::derive` and hand it to `npm run package` as `RELEASE_VERSION`.
 - Bump `MAJOR.MINOR` by tagging: `git tag v0.2.0 && git push --tags`.
 - Pushing a `v*` tag also publishes that build to the Marketplace (`extension.release`, in
   [`.kiln/src/pipelines/extension.rs`](.kiln/src/pipelines/extension.rs)).
+- Every push to `main` that touches the extension is published as a Marketplace pre-release
+  (`extension.prerelease`) at the version that commit derives. A pre-release and a release can't
+  share a version number, so a commit pushed together with its `v*` tag skips the pre-release
+  and goes out as the release, and a manual `extension.release` on a commit that already went
+  out as a pre-release fails. Tag a new commit to release instead.

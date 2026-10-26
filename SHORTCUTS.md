@@ -28,8 +28,10 @@ Keep it under ~15 entries. Full convention: [shortcuts](https://standards.thmsn.
 npx --no-install vsce show thmsn-dev.apim-policy --json | node -p 'const v=JSON.parse(require("fs").readFileSync(0)).versions[0]; v.version + " " + v.lastUpdated'
 ```
 
-Compare with the next section's answer. A `v*` tag or a manual run of `extension.release`
-publishes; until then `main` is ahead of the Marketplace.
+`versions[0]` is the newest of either channel. Add `&& !v.properties.some(p => p.key ===
+"Microsoft.VisualStudio.Code.PreRelease")` to a `.find` instead to get the newest release.
+Every push to `main` touching the extension publishes a pre-release (`extension.prerelease`);
+a `v*` tag or a manual run of `extension.release` publishes a release.
 
 _Verified: 2026-10-23_
 
