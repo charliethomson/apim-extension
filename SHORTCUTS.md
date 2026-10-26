@@ -68,6 +68,11 @@ steps. A run in `error` with no steps was refused before it started, and the CLI
 why: the reason is in the API's `errors` field (repo id 21). One refused workflow refuses the
 whole push, gates included. A secret's allowed events are under `woodpecker-cli repo secret ls`.
 
+A workflow that names a secret Woodpecker doesn't have (`secret "<name>" not found`) refuses the
+push the same way, so create a new secret before pushing the pipeline that uses it. Once it
+exists, rerun the refused push with `woodpecker-cli pipeline start charliethomson/apim-extension
+<number>`.
+
 _Verified: 2026-10-26_
 
 ## Which build is a running VS Code using?
@@ -101,3 +106,20 @@ Worth answering early, if this repo has them:
   - Where do images/artifacts get published?
   - How do I run this locally against real data?
 -->
+
+## Why did cli.prerelease or cli.release fail to publish?
+
+The publish step's log is the last command's output:
+
+```sh
+woodpecker-cli pipeline ps charliethomson/apim-extension <number>
+```
+
+`409 Conflict ... Cannot publish over previously staged version` means that version is waiting in
+npm's staged publishing: taken, but not public until approved. `npm stage list
+@charliethomson/apim-cli` (logged in) shows it; approve it with 2FA on npmjs.com (the package's
+**Staged Packages** tab) or `npm stage approve <stage-id>`, or reject it and rerun the pipeline.
+A run killed mid-publish (a newer push cancelling it) can leave one behind.
+`npm view @charliethomson/apim-cli versions dist-tags` shows what's public.
+
+_Verified: 2026-10-26_
