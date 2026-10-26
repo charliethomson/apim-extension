@@ -4,7 +4,7 @@
   "checkoutKey": "ssh_key",
   "stats": {
     "pipelineCount": 5,
-    "pipelineSourceLines": 454
+    "pipelineSourceLines": 493
   },
   "pipelines": [
     {
@@ -126,7 +126,7 @@
     },
     {
       "name": "repo.checks",
-      "description": "`.woodpecker/` and `.kiln/lock.json` are what `.kiln/src` emits",
+      "description": "`.woodpecker/` and `.kiln/lock.json` are what `.kiln/src` emits · `.kiln/` fmt and clippy",
       "triggers": [
         {
           "event": "push",

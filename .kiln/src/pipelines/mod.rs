@@ -15,7 +15,7 @@ pub const IMAGE: &str = "rust:1-bookworm";
 /// The `.kiln/` files every pipeline is defined by, for path filters.
 pub const KILN: [&str; 3] = [".kiln/src/**", ".kiln/Cargo.toml", ".kiln/Cargo.lock"];
 
-/// node 22 and npm, from NodeSource: Debian bookworm's own `nodejs` is 18.
+/// node 22 and npm, from `deb.nodesource.com`: Debian bookworm's own `nodejs` is 18.
 const NODE_KEY: &str = "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key";
 const NODE_SOURCE: &str = "https://deb.nodesource.com/node_22.x nodistro main";
 

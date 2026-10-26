@@ -225,6 +225,8 @@ docs/           the user guide, reference, fragment header format, known limitat
 scripts/ci/     version derivation for `npm run package`
 .kiln/          the CI pipelines, as Rust (kiln)
 .woodpecker/    generated from .kiln/ by `emit woodpecker`; never edited by hand
+.cargo/         git-fetch-with-cli, for `cargo run --manifest-path .kiln/Cargo.toml` from the root
+.vscode/        Run Extension launch config and its build task
 ```
 
 `npm run lint` enforces the boundaries npm can't: a package imports another only when its
@@ -246,7 +248,7 @@ npm run lint
 ```
 
 ```bash
-npm test
+npm run test:coverage
 ```
 
 ```bash
@@ -267,7 +269,15 @@ changes nothing:
 dotnet build packages/csharp-engine/stubs-check
 ```
 
- `audit.ci` runs `npm audit` on lockfile changes and weekly, and only fails
+`repo.checks` runs when `.kiln/` or `.woodpecker/` changes: the generated files and lockfile
+must match what `.kiln/src` emits, and the crate must pass `cargo fmt --check` and clippy
+pedantic with `-D warnings`:
+
+```bash
+cargo clippy --manifest-path .kiln/Cargo.toml --all-targets -- -D warnings
+```
+
+`audit.ci` runs `npm audit` on lockfile changes and weekly, and only fails
 on a critical advisory that [`audit-exceptions.json`](audit-exceptions.json) has no live
 exception for. Exceptions need a reason and an expiry date, and an expired one fails it. Every
 package under `packages/` has its own 80% coverage floor (`vitest.shared.mts`), met by its own

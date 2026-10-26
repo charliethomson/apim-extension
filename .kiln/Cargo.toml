@@ -26,3 +26,14 @@ publish = false
 [dependencies]
 kiln = { git = "ssh://git@github.com/charliethomson/kiln.git", features = ["node", "git"] }
 libci = { git = "ssh://git@github.com/charliethomson/libci.git", features = ["version", "audit", "secrets"] }
+
+# The fleet's lint baseline (https://standards.thmsn.dev/d/rust-conventions). `repo.checks` runs
+# clippy over this crate with `-D warnings`, and `cargo fmt --check`.
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = 0 }
+missing_errors_doc = { level = "allow", priority = 1 }
+panic = { level = "warn", priority = 1 }
+implicit_hasher = { level = "allow", priority = 1 }
+
+[lints]
+workspace = true

@@ -61,6 +61,8 @@ versioning and ignore the Rust-specific parts.
   - `extension.ci`: typecheck, lint, every package's unit tests with coverage, packaging and the
     integration suite in one job. `engine.ci`: on `packages/csharp-engine` changes, the stubs
     build and the generated-assets drift check (.NET SDK 10.0.103, cached). `audit.ci`: libci's `AuditGate` over `npm audit`, with `audit-exceptions.json`.
+    `repo.checks`: `.woodpecker/` and the lockfile match a fresh emit, and `.kiln/` passes
+    `cargo fmt --check` and clippy pedantic (`[lints]` in `.kiln/Cargo.toml`) with `-D warnings`.
     `extension.release`: publishes to the Visual Studio Marketplace on `v*` tags or by hand.
   - **Push-only.** `.kiln/` depends on the private kiln and libci, so jobs fetch them with the
     `ssh_key` checkout key, and kiln refuses pull-request triggers on such a repo. Changes are

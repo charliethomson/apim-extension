@@ -26,6 +26,14 @@
 //! fresh `cargo run` inside the body has neither. The job is already running
 //! the built binary, so it re-execs that instead — no cargo, no network, no
 //! git.
+//!
+//! # Lint `.kiln/` too
+//!
+//! The one place this job does run cargo: `cargo fmt --check` and clippy with
+//! `-D warnings` over `.kiln/`, offline against the same vendored dependencies
+//! the generated step built it from.
+
+use std::fmt::Write as _;
 
 use super::IMAGE as TOOLCHAIN_IMAGE;
 use kiln::prelude::*;
@@ -45,14 +53,15 @@ const FIX: &str = "cargo run --manifest-path .kiln/Cargo.toml -- emit woodpecker
 /// `repo.checks`.
 pub fn checks() -> Pipeline {
     Pipeline::new("repo.checks")
-        .describe("`.woodpecker/` and `.kiln/lock.json` are what `.kiln/src` emits")
+        .describe("`.woodpecker/` and `.kiln/lock.json` are what `.kiln/src` emits · `.kiln/` fmt and clippy")
         .on(Push::to("main").paths([".kiln/**", ".woodpecker/**"]))
         .on(Manual)
         .serialize(Always::cancel())
         .job("kiln", |j| {
             j.on(Linux).image(TOOLCHAIN_IMAGE).run(|ctx| {
                 workflows(ctx)?;
-                lockfile(ctx)
+                lockfile(ctx)?;
+                lint(ctx)
             })
         })
 }
@@ -115,13 +124,13 @@ fn workflows(ctx: &Ctx) -> Result<()> {
             [("changed", &drifted), ("never committed", &missing), ("generated but unregistered", &orphaned)]
         {
             if !files.is_empty() {
-                report.push_str(&format!("  {label}: {}\n", files.join(" ")));
+                let _ = writeln!(report, "  {label}: {}", files.join(" "));
             }
         }
         if !orphaned.is_empty() {
             report.push_str("  An orphan still runs — `emit` overwrites but never deletes, so delete it by hand.\n");
         }
-        report.push_str(&format!("Fix:\n{FIX}"));
+        let _ = write!(report, "Fix:\n{FIX}");
         Err(ctx.err(report))
     })
 }
@@ -138,11 +147,41 @@ fn lockfile(ctx: &Ctx) -> Result<()> {
     })
 }
 
+/// What the fetch step resolved `.kiln/`'s dependencies into. The generated job builds `.kiln/`
+/// offline against it, and so does clippy; it isn't there on a laptop, where cargo fetches.
+const VENDOR_CONFIG: &str = "/woodpecker/kiln-vendor.toml";
+
+/// `.kiln/` itself meets the fleet baseline: `cargo fmt --check`, and clippy pedantic (the
+/// `[lints]` in `.kiln/Cargo.toml`) with `-D warnings`. The image ships rustup's minimal profile,
+/// which has neither rustfmt nor clippy, so each is added first unless it's already there.
+fn lint(ctx: &Ctx) -> Result<()> {
+    let manifest = ctx.workspace().join(".kiln/Cargo.toml");
+    for (tool, component) in [("fmt", "rustfmt"), ("clippy", "clippy")] {
+        if ctx.run("cargo", [tool, "--version"]).allow_failure().call()?.failed() {
+            ctx.run("rustup", ["component", "add", component]).call()?;
+        }
+    }
+    ctx.step("kiln fmt", |ctx| {
+        ctx.run("cargo", ["fmt", "--check", "--manifest-path"]).arg(&manifest).call().map(drop)
+    })?;
+    ctx.step("kiln clippy", |ctx| {
+        let mut clippy = ctx.run("cargo", ["clippy", "--all-targets", "--manifest-path"]).arg(&manifest);
+        if ctx.exists(VENDOR_CONFIG) {
+            clippy = clippy.args(["--offline", "--config", VENDOR_CONFIG]);
+        }
+        clippy.args(["--", "-D", "warnings"]).call().map(drop)
+    })
+}
+
 /// The `.yml` files in `dir`, by name, sorted.
 fn listing(ctx: &Ctx, dir: &Path) -> Result<Vec<String>> {
     let out = ctx.run("ls", ["-1"]).arg(dir).capture()?;
-    let mut names: Vec<String> =
-        out.lines().map(str::trim).filter(|n| n.ends_with(".yml")).map(str::to_owned).collect();
+    let mut names: Vec<String> = out
+        .lines()
+        .map(str::trim)
+        .filter(|n| std::path::Path::new(n).extension().is_some_and(|e| e.eq_ignore_ascii_case("yml")))
+        .map(str::to_owned)
+        .collect();
     names.sort();
     Ok(names)
 }
