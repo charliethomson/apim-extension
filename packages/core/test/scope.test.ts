@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { instancePath, scopeFromInstancePath, scopeFromPath, scopeKey, scopeLabel, type Scope } from '../src/scope';
+import { extractPolicyPath, extractRootOf, instancePath, scopeFromInstancePath, scopeFromPath, scopeKey, scopeLabel, type Scope } from '../src/scope';
 
 describe('scopeFromPath', () => {
   it('reads the APIOps layout', () => {
@@ -55,5 +55,28 @@ describe('instance document paths', () => {
     for (const p of ['/apim1', '/apim1/apis', '/apim1/apis/echo', '/apim1/fragments/x.policy.xml', '/apim1/apis/.policy.xml', '/apim1/other/x.policy.xml', '/apim1/apis/a/b/c.policy.xml']) {
       expect(scopeFromInstancePath(p), p).toBeUndefined();
     }
+  });
+});
+
+describe('extract paths', () => {
+  const scopes: Scope[] = [
+    { kind: 'global' },
+    { kind: 'workspace', workspace: 'team' },
+    { kind: 'product', product: 'starter' },
+    { kind: 'api', api: 'echo' },
+    { kind: 'operation', api: 'echo', operation: 'get' },
+    { kind: 'fragment', fragment: 'sign' },
+  ];
+
+  it('names each scope\'s policy file, which reads back as that scope', () => {
+    for (const scope of scopes) {
+      const path = `/r/${extractPolicyPath(scope)}`;
+      expect(scopeFromPath(path, (dir) => dir === '/r')).toEqual(scope);
+      expect(extractRootOf(path, scope)).toBe('/r');
+    }
+  });
+
+  it('finds the root from a Windows path', () => {
+    expect(extractRootOf('C:\\r\\apis\\echo\\policy.xml', { kind: 'api', api: 'echo' })).toBe('C:/r');
   });
 });

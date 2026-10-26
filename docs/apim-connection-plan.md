@@ -1,7 +1,10 @@
 # Plan: knowing the APIM instance, and running policies offline
 
 Status: phase 2 is built (2026-10-23), ahead of phase 1, since the instance was what was needed
-first; see "Phase 2 as built". Phases 1 and 3 aren't started.
+first; see "Phase 2 as built". Phase 1's scope chains and outer variables from an extract are
+built (2026-10-26, milestone 0 of [policy-testing-plan.md](policy-testing-plan.md)), with the
+instance filling in what the extract lacks; its named values, backends and settings parts aren't.
+Phase 3 became the policy-testing plan.
 
 Today the extension knows only the policy files open in the workspace. Three things it can't see
 make its checks weaker than they should be:

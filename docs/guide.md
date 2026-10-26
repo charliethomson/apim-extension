@@ -131,6 +131,7 @@ Fragment headers are laid out in columns.
 Management service. The **API Management** view in the activity bar then browses its policies,
 fragments, named values and backends. Fragments, named values and backends also feed completion
 and checks in local files, and variables set by broader scopes (products, global) count as set.
+In an APIOps extract those broader scopes are read from the extract itself, instance or not.
 
 Policies from the instance open read-only. **Open as Editable** gives a copy you can change.
 Saving it keeps a draft in memory, and **Push to Instance** shows a diff against what's live

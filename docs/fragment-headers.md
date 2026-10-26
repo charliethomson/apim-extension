@@ -176,10 +176,10 @@ callers see edits before they're pushed):
   the inputs of the fragments the file includes come first, required before optional, each with its
   type, default and description.
 - **A warning** when a required `@in` isn't set earlier in the file, by `set-variable`, as an
-  `@out` of an earlier include, or (with an instance connected) by a broader scope; the inlay hint
-  then starts `missing: sig-key ·`. A quick fix adds the missing `set-variable` lines above the
-  include. Where products or the global policy set inputs and no instance is connected to show
-  it, set `apimPolicy.lint.missingInput` to `information` (or `off`).
+  `@out` of an earlier include, or by a broader scope (read from the APIOps extract the file is in,
+  or a connected instance); the inlay hint then starts `missing: sig-key ·`. A quick fix adds the
+  missing `set-variable` lines above the include. Where products or the global policy set inputs
+  and neither shows it, set `apimPolicy.lint.missingInput` to `information` (or `off`).
 - **Completion** of `context.Variables["…"]` offers the fragment's `@out`s with their types and
   descriptions, and only those: a documented fragment's other variables are its own business.
 

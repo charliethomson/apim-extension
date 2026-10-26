@@ -1,0 +1,10 @@
+<policies>
+    <inbound>
+        <set-variable name="tenant-name" value="contoso" />
+    </inbound>
+    <backend>
+        <forward-request />
+    </backend>
+    <outbound />
+    <on-error />
+</policies>

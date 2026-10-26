@@ -114,6 +114,14 @@ describe('APIM policy extension', () => {
       assert.ok(names.some((n) => n.startsWith('ru-ret-')), names.slice(0, 20).join(', '));
     });
 
+    it('offers variables the broader scopes in the extract set, with no instance', async () => {
+      const doc = await open('apiops/apis/echo/operations/get/policy.xml');
+      const pos = at(doc, 'context.Variables["');
+      const items = await waitFor(async () => await complete(doc, pos, '"'), (l) => labels(l).includes('product-tier'), 10000);
+      const names = labels(items);
+      assert.ok(names.includes('tenant-name') && names.includes('product-tier'), names.slice(0, 20).join(', '));
+    });
+
     it("shows a fragment's documented @in and @out after its include, and on hover", async () => {
       const doc = await open('apiops/apis/random-users/policy.xml');
       const full = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));

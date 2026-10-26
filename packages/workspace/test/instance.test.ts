@@ -74,6 +74,14 @@ describe('reading an instance', () => {
     await names();
     expect(instance.policyReads).toHaveLength(2 + 2 + 1 + 2);
   });
+
+  it('reads scopes soft for layering under an extract', async () => {
+    const instance = new FakeInstance([], { '/inst/global.policy.xml': policyXml('') }, { echo: ['gold'] });
+    instance.policy = () => Promise.reject(new Error('forbidden'));
+    const reads = new InstanceReader(instance, passThrough, uriOf).scopeReads();
+    expect(await reads.productsOf('echo')).toEqual(['gold']);
+    expect(await reads.policy({ kind: 'global' })).toBeUndefined();
+  });
 });
 
 describe("a document's scope", () => {

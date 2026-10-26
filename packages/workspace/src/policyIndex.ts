@@ -1,8 +1,9 @@
-import { fragmentIdsFor, scopeFromInstancePath, scopeLabel } from '@apim-policy/core';
+import { extractRootOf, fragmentIdsFor, type Scope, scopeFromInstancePath, scopeFromPath, scopeLabel } from '@apim-policy/core';
 import { type Document, parse } from '@apim-policy/document';
 import type { Suggestion } from '@apim-policy/catalog';
-import { type KnownVariable, knownVariables, type OuterSet, type PolicySummary, type RelatedFile, summarize } from '@apim-policy/analysis';
+import { type KnownVariable, knownVariables, type OuterSet, outerVariables, type PolicySummary, type RelatedFile, summarize } from '@apim-policy/analysis';
 import type { NamedValue } from '@apim-policy/azure';
+import { ExtractReader, type ExtractFiles, scopeChains, type ScopeReads } from './extract';
 import { type Disposable, EDIT_SCHEME, type InstanceSource, type RemoteFragment, type WorkspaceHost } from './host';
 
 interface Entry<U> {
@@ -30,8 +31,21 @@ export class PolicyIndex<U> implements Disposable {
   private scanned?: Promise<void>;
   private changeTimer?: ReturnType<typeof setTimeout>;
   private remote?: InstanceSource<U>;
+  /** APIOps extracts in the workspace, by root, for the broader scopes around their policies. */
+  private readonly extracts = new Map<string, ExtractReader>();
+  /** Broader scopes' parsed policies read from disk, by key, until the file changes. */
+  private readonly outerDocs = new Map<string, Promise<Document | undefined>>();
+  /** What the broader scopes set around a file in an extract, per parse, until anything changes. */
+  private readonly outerResults = new Map<string, { doc: Document; value: Promise<OuterSet[]> }>();
+  private readonly extractFiles: ExtractFiles;
 
-  constructor(private readonly host: WorkspaceHost<U>) {}
+  constructor(private readonly host: WorkspaceHost<U>) {
+    this.extractFiles = {
+      policy: (path) => this.outerDoc(path),
+      text: (path) => this.host.readText(this.host.file(path)),
+      folders: (path) => this.host.folders(this.host.file(path)),
+    };
+  }
 
   /** Calls `listener` when any indexed file's summary changes (debounced). */
   onDidChange(listener: () => void): Disposable {
@@ -56,17 +70,29 @@ export class PolicyIndex<U> implements Disposable {
   // ---- events from the host ---------------------------------------------------------------------
 
   fileCreated(uri: U): void {
+    if (this.productApisChanged(uri)) return;
     if (this.scanned && !this.ignored(uri)) void this.updateFromDisk(uri);
   }
 
   /** An open document's file changing on disk is the editor's business; its text comes from there. */
   fileChanged(uri: U): void {
+    if (this.productApisChanged(uri)) return;
     if (!this.scanned || this.ignored(uri) || this.host.isOpen(uri)) return;
     void this.updateFromDisk(uri);
   }
 
   fileDeleted(uri: U): void {
+    if (this.productApisChanged(uri)) return;
     this.delete(this.host.key(uri));
+  }
+
+  /** A product's `apis.json` (which APIs it holds) changed: chains are read again. */
+  private productApisChanged(uri: U): boolean {
+    if (!/\/products\/[^/]+\/apis\.json$/.test(this.host.path(uri))) return false;
+    for (const e of this.extracts.values()) e.forgetProducts();
+    this.outerResults.clear();
+    this.notify();
+    return true;
   }
 
   /**
@@ -178,19 +204,78 @@ export class PolicyIndex<U> implements Disposable {
     return (await this.remote.backends()).map((b) => ({ name: b.id, detail: b.url, documentation: b.description }));
   }
 
-  /** What the broader scopes set, placed in `doc` (the policy at `uri`); nothing without an instance and a scope. */
+  /**
+   * What the broader scopes set, placed in `doc` (the policy at `uri`). A file in an APIOps extract
+   * reads them from the extract; anything else from the connected instance. Nothing for a policy
+   * with neither.
+   */
   async outerVariables(uri: U, doc: Document): Promise<OuterSet[]> {
-    if (!this.remote) return [];
+    const extract = this.extractFor(uri);
+    if (!extract && !this.remote) return [];
     await this.ready;
     // What includes in the outer policies set: the workspace's copy of a fragment, else the instance's.
     const summaries = new Map<string, PolicySummary>();
-    for (const f of await this.remote.fragments()) summaries.set(f.id, f.summary);
+    for (const f of this.remote ? await this.remote.fragments() : []) summaries.set(f.id, f.summary);
     for (const e of this.entries.values()) for (const id of e.fragmentIds) summaries.set(id, e.summary);
     const includeSets = (id: string) => {
       const s = summaries.get(id);
       return s && (s.header ? s.header.outputs.map((v) => v.name) : s.variables.map((v) => v.name));
     };
-    return this.remote.outerVariables(uri, doc, includeSets);
+    if (!extract) return this.remote ? this.remote.outerVariables(uri, doc, includeSets) : [];
+    const key = this.host.key(uri);
+    const hit = this.outerResults.get(key);
+    if (hit?.doc === doc) return hit.value;
+    const value = scopeChains(extract.scope, this.layered(extract.reader)).then((chains) => outerVariables(doc, chains, includeSets));
+    this.outerResults.set(key, { doc, value });
+    return value;
+  }
+
+  /**
+   * The extract a workspace file's policy is in, and its scope there: from an APIOps-shaped path.
+   * Fragments have no broader scopes, so they're in none.
+   */
+  extractFor(uri: U): { reader: ExtractReader; scope: Scope } | undefined {
+    if (!this.isFile(uri)) return undefined;
+    const path = this.host.path(uri);
+    const scope = scopeFromPath(path, (dir) => this.isExtractRoot(dir));
+    if (!scope || scope.kind === 'fragment') return undefined;
+    const root = extractRootOf(path, scope);
+    let reader = this.extracts.get(root);
+    if (!reader) this.extracts.set(root, (reader = new ExtractReader(root, this.extractFiles)));
+    return { reader, scope };
+  }
+
+  /**
+   * An extract's scopes with the instance's under them, as for fragments: a scope's file in the
+   * workspace wins, and the instance has the policies the extract lacks. Products come from the
+   * extract when it has any.
+   */
+  private layered(extract: ExtractReader): ScopeReads {
+    const instance = this.remote?.scopeReads();
+    if (!instance) return extract;
+    return {
+      productsOf: async (api) => ((await extract.hasProducts()) ? extract.productsOf(api) : instance.productsOf(api)),
+      policy: async (s) => (await extract.policy(s)) ?? instance.policy(s),
+    };
+  }
+
+  /** A broader scope's policy from disk (or from the editor, while it's open there). */
+  private outerDoc(path: string): Promise<Document | undefined> {
+    const uri = this.host.file(path);
+    if (this.host.isOpen(uri)) {
+      const key = this.host.key(uri);
+      return Promise.resolve(this.host.openPolicies().find((p) => this.host.key(p.uri) === key)?.doc);
+    }
+    const key = this.host.key(uri);
+    let doc = this.outerDocs.get(key);
+    if (!doc) {
+      doc = this.host.readPolicy(uri).then(
+        (text) => (text === undefined ? undefined : parse(text)),
+        () => undefined,
+      );
+      this.outerDocs.set(key, doc);
+    }
+    return doc;
   }
 
   /** Whether `dir` holds an APIOps extract: apis/ or policyFragments/ under it. */
@@ -221,13 +306,16 @@ export class PolicyIndex<U> implements Disposable {
       uri: v.originKey ? this.host.parse(v.originKey) : uri,
     }));
     const names = new Set(known.map((v) => v.name));
+    const extract = this.extractFor(uri);
     const remote = this.remote;
-    if (!remote) return known;
+    if (!extract && !remote) return known;
+    // The scope's file when the extract has one, else the instance's copy.
+    const outerUri = async (s: Scope) => (extract && (!remote || (await extract.reader.policy(s))) ? this.host.file(extract.reader.policyPath(s)) : (remote as InstanceSource<U>).policyUri(s));
     // Completion asks for these, so the instance gets 300 ms; the read carries on for next time.
     for (const o of await within(this.outerVariables(uri, doc), [], 300)) {
       if (names.has(o.name)) continue;
       names.add(o.name);
-      known.push({ name: o.name, range: { start: 0, end: 0 }, element: 'set-variable', origin: `set by ${scopeLabel(o.scope)}`, uri: remote.policyUri(o.scope) });
+      known.push({ name: o.name, range: { start: 0, end: 0 }, element: 'set-variable', origin: `set by ${scopeLabel(o.scope)}`, uri: await outerUri(o.scope) });
     }
     return known;
   }
@@ -284,11 +372,19 @@ export class PolicyIndex<U> implements Disposable {
 
   private set(key: string, entry: Entry<U>): void {
     this.entries.set(key, entry);
+    this.forgetOuter(key);
     this.notify();
   }
 
   private delete(key: string): void {
+    this.forgetOuter(key);
     if (this.entries.delete(key)) this.notify();
+  }
+
+  /** A file changed: its copy as a broader scope goes, and so does every placement worked out. */
+  private forgetOuter(key: string): void {
+    this.outerDocs.delete(key);
+    this.outerResults.clear();
   }
 
   /** One event per burst: a workspace scan or a typing run updates many entries. */

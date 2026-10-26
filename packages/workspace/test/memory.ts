@@ -33,6 +33,16 @@ export class MemoryHost implements WorkspaceHost<Uri> {
     if (text === null) return Promise.reject(new Error('unreadable'));
     return Promise.resolve(text !== undefined && looksLikePolicy(text) ? text : undefined);
   };
+  readText = (uri: Uri) => {
+    const text = this.files.get(uri);
+    if (text === null) return Promise.reject(new Error('unreadable'));
+    return Promise.resolve(text);
+  };
+  folders = (uri: Uri) => {
+    const prefix = `${uri}/`;
+    const names = [...this.files.keys()].filter((k) => k.startsWith(prefix) && k.slice(prefix.length).includes('/')).map((k) => k.slice(prefix.length).split('/')[0]);
+    return Promise.resolve([...new Set(names)]);
+  };
   openPolicies = () => [...this.open].map(([uri, doc]) => ({ uri, doc }));
   isOpen = (uri: Uri) => this.open.has(uri);
 
@@ -76,6 +86,16 @@ export class MemoryInstance implements InstanceSource<Uri> {
     if (!scope) return Promise.resolve([]);
     const chain = this.policies.map((p) => ({ scope: p.scope, doc: parse(p.xml) }));
     return Promise.resolve(placeOuter(doc, [chain], includeSets));
+  }
+
+  scopeReads() {
+    return {
+      productsOf: () => Promise.resolve(this.products),
+      policy: (scope: Scope) => {
+        const xml = this.policies.find((p) => JSON.stringify(p.scope) === JSON.stringify(scope))?.xml;
+        return Promise.resolve(xml === undefined ? undefined : parse(xml));
+      },
+    };
   }
 
   policyUri(scope: Scope): Uri {

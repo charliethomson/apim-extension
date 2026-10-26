@@ -64,6 +64,33 @@ export function scopeFromPath(path: string, isExtractRoot?: (dir: string) => boo
   return isExtractRoot?.(dir) ? { kind: 'global' } : undefined;
 }
 
+/** A scope's policy file in an APIOps extract, relative to the extract's root. */
+export function extractPolicyPath(scope: Scope): string {
+  switch (scope.kind) {
+    case 'global':
+      return 'policy.xml';
+    case 'workspace':
+      return `workspaces/${scope.workspace}/policy.xml`;
+    case 'product':
+      return `products/${scope.product}/policy.xml`;
+    case 'api':
+      return `apis/${scope.api}/policy.xml`;
+    case 'operation':
+      return `apis/${scope.api}/operations/${scope.operation}/policy.xml`;
+    case 'fragment':
+      return `policyFragments/${scope.fragment}/policy.xml`;
+  }
+}
+
+/**
+ * The extract root holding `path`, the policy file of `scope` (as `scopeFromPath` read it): the
+ * path with the scope's own part taken off. Forward slashes, no trailing one.
+ */
+export function extractRootOf(path: string, scope: Scope): string {
+  const parts = path.replace(/\\/g, '/').split('/');
+  return parts.slice(0, parts.length - extractPolicyPath(scope).split('/').length).join('/');
+}
+
 /**
  * The path of a scope's policy in the instance's documents (`apim-instance:`, `apim-edit:`),
  * named for what it is so editor tabs and Quick Open tell them apart:

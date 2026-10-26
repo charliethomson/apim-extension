@@ -241,6 +241,96 @@ describe('variables a policy can read', () => {
   });
 });
 
+describe('the broader scopes in an extract', () => {
+  const OP = 'file:///ws/apis/echo/operations/get/policy.xml';
+  const extract = () => {
+    const host = workspace();
+    host.files.set('file:///ws/policy.xml', policyXml('<set-variable name="tenant" value="t" />'));
+    host.files.set('file:///ws/products/gold/policy.xml', policyXml('<set-variable name="tier" value="gold" /><include-fragment fragment-id="sign" />'));
+    host.files.set('file:///ws/products/gold/apis.json', '["echo"]');
+    host.files.set(OP, policyXml(''));
+    return host;
+  };
+  const names = async (index: PolicyIndex<string>, uri: string, doc: ReturnType<typeof parse>) => [...new Set((await index.outerVariables(uri, doc)).map((o) => o.name))].sort();
+
+  it('places what the API, its products and the global policy set, with no instance', async () => {
+    const host = extract();
+    const index = new PolicyIndex(host);
+    const doc = parse(host.files.get(OP)!);
+    expect(await names(index, OP, doc)).toEqual(['sig-header', 'sig-key', 'tenant', 'tier']);
+    const known = await index.variables(OP, doc);
+    expect(known.find((v) => v.name === 'tier')).toMatchObject({ origin: 'set by product gold', uri: 'file:///ws/products/gold/policy.xml' });
+  });
+
+  it('reads each broader policy once, until it changes', async () => {
+    const host = extract();
+    const index = new PolicyIndex(host);
+    const doc = parse(host.files.get(OP)!);
+    await index.outerVariables(OP, doc);
+    const reads = host.reads;
+    await index.outerVariables(OP, parse(host.files.get(OP)!));
+    expect(host.reads).toBe(reads);
+    host.files.set('file:///ws/policy.xml', policyXml('<set-variable name="region" value="uk" />'));
+    index.fileChanged('file:///ws/policy.xml');
+    await vi.waitFor(async () => expect(await names(index, OP, doc)).toContain('region'));
+  });
+
+  it("uses an open broader policy's live text", async () => {
+    const host = extract();
+    const index = new PolicyIndex(host);
+    const live = host.edit('file:///ws/policy.xml', policyXml('<set-variable name="draft" value="d" />'));
+    index.documentChanged('file:///ws/policy.xml', live);
+    expect(await names(index, OP, parse(host.files.get(OP)!))).toContain('draft');
+  });
+
+  it("reads products again when an apis.json changes", async () => {
+    const host = extract();
+    const index = new PolicyIndex(host);
+    const doc = parse(host.files.get(OP)!);
+    expect(await names(index, OP, doc)).toContain('tier');
+    host.files.set('file:///ws/products/gold/apis.json', '[]');
+    index.fileChanged('file:///ws/products/gold/apis.json');
+    expect(await names(index, OP, doc)).not.toContain('tier');
+    host.files.delete('file:///ws/products/gold/apis.json');
+    index.fileDeleted('file:///ws/products/gold/apis.json');
+    host.files.set('file:///ws/products/gold/apis.json', '["echo"]');
+    index.fileCreated('file:///ws/products/gold/apis.json');
+    expect(await names(index, OP, doc)).toContain('tier');
+  });
+
+  it("fills in from the instance what the extract lacks, and points there", async () => {
+    const host = workspace();
+    const OP2 = 'file:///ws/apis/echo/operations/get/policy.xml';
+    host.files.set(OP2, policyXml(''));
+    const index = new PolicyIndex(host);
+    const instance = new MemoryInstance({}, [], [], [
+      { scope: { kind: 'global' }, xml: policyXml('<set-variable name="tenant" value="t" />') },
+      { scope: { kind: 'product', product: 'gold' }, xml: policyXml('<set-variable name="tier" value="gold" />') },
+    ]);
+    instance.products = ['gold'];
+    index.attach(instance);
+    const doc = parse(host.files.get(OP2)!);
+    // No products/ in the extract: the instance says which products the API is in.
+    expect(await names(index, OP2, doc)).toEqual(['sig-header', 'sig-key', 'tenant', 'tier']);
+    const known = await index.variables(OP2, doc);
+    expect(known.find((v) => v.name === 'tenant')?.uri).toBe('apim-instance://inst/inst/global.policy.xml');
+    expect(known.find((v) => v.name === 'sig-key')?.uri).toBe('file:///ws/apis/echo/policy.xml');
+    // Once the extract has products, it decides.
+    host.files.set('file:///ws/products/silver/apis.json', '[]');
+    index.fileCreated('file:///ws/products/silver/apis.json');
+    expect(await names(index, OP2, doc)).not.toContain('tier');
+  });
+
+  it('gives fragments and files outside an extract nothing', async () => {
+    const host = extract();
+    host.files.set('file:///elsewhere/a.policy.xml', policyXml(''));
+    const index = new PolicyIndex(host);
+    expect(index.extractFor(SIGN)).toBeUndefined();
+    expect(await index.outerVariables('file:///elsewhere/a.policy.xml', parse(policyXml('')))).toEqual([]);
+    expect(index.extractFor(EDIT_SIGN)).toBeUndefined();
+  });
+});
+
 describe('APIOps extracts', () => {
   it('knows a folder that holds apis/ or policyFragments/', async () => {
     const index = new PolicyIndex(workspace());

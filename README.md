@@ -71,7 +71,8 @@ subscriptions and API Management services, and sets `apimPolicy.instance`. From 
 - variables the broader scopes set (each product the API is in, then global) count as set in the
   checks and completion, from the policy's `<base />` on. The status bar shows the policy's scope:
   taken from an APIOps-shaped path (`apis/<api>/operations/<op>/policy.xml`), or set with
-  **APIM: Set This Policy's Scope**.
+  **APIM: Set This Policy's Scope**. In an APIOps extract this works with no instance (see
+  Features); a connected instance fills in the scopes the extract lacks.
 
 The **API Management** view in the activity bar browses the instance: the global policy,
 products, APIs and their operations, fragments, named values (secrets shown as such) and
@@ -178,6 +179,10 @@ policy.xml ──► tolerant parser ──► elements, attributes, expressions
   `set-variable` value for a typed variable completes (or quick-fixes) to a filled-in one, Go to
   Definition on its name opens the fragment's `@in`, and any `new JObject { … }` in a fragment can
   be extracted to a `@typedef`.
+- **Broader scopes:** in an APIOps extract, a policy sees what its API, products and the global
+  policy set (`products/<p>/apis.json` says which products hold an API), from its `<base />` on,
+  with no instance connected. A broader policy's file wins over an instance's copy, as fragments
+  do.
 - **Arguments, returns and internals:** a fragment header says which variables are `@in`, `@out`
   and `@internal` (by name or prefix pattern). Callers are warned when they read a fragment's
   internals, or when one overwrites a variable they set, and a fragment is asked to declare each
@@ -215,7 +220,7 @@ own; `extension/` wires them to the editor. Dependencies point one way, top to b
 | [`packages/catalog`](packages/catalog) | what APIM accepts: `data/policies.json`, structural validation, XML completion | core, document |
 | [`packages/analysis`](packages/analysis) | what a policy does: variables, fragment headers, variable safety, scope chains, JSON shapes, formatting, docs; the fragment diagnostics, include hints and the edits the header quick fixes make | core, csharp-lexer, csharp-engine, document, catalog |
 | [`packages/azure`](packages/azure) | the Resource Manager client, the instance reader, the push format | core, document |
-| [`packages/workspace`](packages/workspace) | the index of every policy file (plus the connected instance's fragments, named values and outer scopes) and the JSON shapes across them, behind a host interface the extension implements; what includes declare, and the instance reader the extension's connection reads through | core, document, catalog, analysis, csharp-engine, azure |
+| [`packages/workspace`](packages/workspace) | the index of every policy file (plus the connected instance's fragments, named values and outer scopes) and the JSON shapes across them; the broader scopes read from an APIOps extract or an instance; behind a host interface the extension implements; what includes declare, and the instance reader the extension's connection reads through | core, document, catalog, analysis, csharp-engine, azure |
 | [`packages/fixtures`](packages/fixtures) | sample policies the suites share (test-only) | nothing |
 | [`extension/`](extension) | the `.vsix`: manifest, providers, grammars, snippets, the integration suite | everything |
 | [`bench/`](bench) | hot-path benchmarks | the packages it times |

@@ -5,7 +5,7 @@ import { log } from '../log';
 import type { Document } from '@apim-policy/document';
 import type { IncludeSets, OuterSet } from '@apim-policy/analysis';
 import { instancePath, scopeLabel, type Scope } from '@apim-policy/core';
-import { documentScope, INSTANCE_SCHEME, InstanceReader, type InstanceSource, type RemoteFragment, unknownNamedValues } from '@apim-policy/workspace';
+import { documentScope, INSTANCE_SCHEME, InstanceReader, type InstanceSource, type RemoteFragment, type ScopeReads, unknownNamedValues } from '@apim-policy/workspace';
 
 const SCOPES_KEY = 'apimPolicy.scopes';
 
@@ -128,6 +128,11 @@ export class InstanceConnection implements vscode.Disposable, InstanceSource<vsc
   outerVariables(uri: vscode.Uri, doc: Document, includeSets: IncludeSets): Promise<OuterSet[]> {
     const scope = this.scopeOf(uri);
     return this.reader && scope ? this.reader.outerVariables(uri.toString(), scope, doc, includeSets) : Promise.resolve([]);
+  }
+
+  /** The instance's scopes, to fill in what an extract in the workspace lacks. */
+  scopeReads(): ScopeReads | undefined {
+    return this.reader?.scopeReads();
   }
 
   /** The read-only document for a scope's policy on the instance. */

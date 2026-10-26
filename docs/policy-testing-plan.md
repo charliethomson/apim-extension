@@ -1,6 +1,6 @@
 # Plan: unit tests for APIM policies, in CI
 
-Status: planned (2026-10-26), nothing built. This replaces phase 3 of
+Status: planned (2026-10-26). Milestone 0 is built. This replaces phase 3 of
 [apim-connection-plan.md](apim-connection-plan.md) with the decisions made since.
 
 APIOps publishes policy files and checks nothing about what they do. A policy's logic is only

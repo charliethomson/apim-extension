@@ -7,6 +7,7 @@ import type { Backend, NamedValue } from '@apim-policy/azure';
 import type { Scope } from '@apim-policy/core';
 import type { Document } from '@apim-policy/document';
 import type { IncludeSets, OuterSet, PolicySummary } from '@apim-policy/analysis';
+import type { ScopeReads } from './extract';
 
 /** Editable copies of instance documents; an open one stands in for the instance's version. */
 export const EDIT_SCHEME = 'apim-edit';
@@ -36,6 +37,10 @@ export interface WorkspaceHost<U> {
   findNamedValueFiles(): Promise<U[]>;
   /** A file's text when it's a policy; undefined when it isn't one. Throws when it can't be read. */
   readPolicy(uri: U): Promise<string | undefined>;
+  /** A file's text, or undefined when there's no such file. */
+  readText(uri: U): Promise<string | undefined>;
+  /** The names of the folders in the folder `uri`; empty when it doesn't exist. */
+  folders(uri: U): Promise<string[]>;
   /** Policies open in the editor, from their live text. */
   openPolicies(): { uri: U; doc: Document }[];
   /** Whether `uri` is open in the editor, which then owns its text. */
@@ -58,6 +63,11 @@ export interface InstanceSource<U> {
   backends(): Promise<Backend[]>;
   /** What the broader scopes set before each point of `doc`, the policy at `uri`. */
   outerVariables(uri: U, doc: Document, includeSets: IncludeSets): Promise<OuterSet[]>;
+  /**
+   * The instance's scopes, read soft (a failed read is no products, no policy), to fill in what an
+   * extract in the workspace lacks. Undefined when no instance is connected.
+   */
+  scopeReads(): ScopeReads | undefined;
   /** The read-only document for a scope's policy on the instance. */
   policyUri(scope: Scope): U;
   onDidChange(listener: () => void): Disposable;

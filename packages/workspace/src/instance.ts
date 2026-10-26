@@ -7,7 +7,8 @@
 import type { Backend, Fragment, NamedValue, Product } from '@apim-policy/azure';
 import { scopeFromInstancePath, scopeFromPath, type OffsetRange, type Scope } from '@apim-policy/core';
 import { type Document, type Node, parse } from '@apim-policy/document';
-import { chainsFor, type IncludeSets, type OuterSet, outerVariables, summarize } from '@apim-policy/analysis';
+import { type IncludeSets, type OuterSet, outerVariables, summarize } from '@apim-policy/analysis';
+import { scopeChains, type ScopeReads } from './extract';
 import { EDIT_SCHEME, INSTANCE_SCHEME, type RemoteFragment } from './host';
 
 /** The reads an instance answers (`ApimInstance` in @apim-policy/azure). */
@@ -69,19 +70,26 @@ export class InstanceReader<U> {
     const hit = this.outerCache.get(key);
     const scopeKey = JSON.stringify(scope);
     if (hit && hit.doc === doc && hit.scope === scopeKey) return hit.value;
-    const i = this.instance;
     const value = this.guard(
-      (async () => {
-        const products = scope.kind === 'api' || scope.kind === 'operation' ? (await i.productsOf(scope.api)).map((p) => p.id) : [];
-        const chains = await Promise.all(
-          chainsFor(scope, products).map((chain) => Promise.all(chain.map(async (s) => ({ scope: s, doc: await i.policy(s).then((xml) => (xml === undefined ? undefined : this.parse(xml))) })))),
-        );
-        return outerVariables(doc, chains, includeSets);
-      })(),
+      scopeChains(scope, this.reads(false)).then((chains) => outerVariables(doc, chains, includeSets)),
       [],
     );
     this.outerCache.set(key, { doc, scope: scopeKey, value });
     return value;
+  }
+
+  /** The instance's scopes, each read soft: a failed read is no products, or no policy. */
+  scopeReads(): ScopeReads {
+    return this.reads(true);
+  }
+
+  private reads(soft: boolean): ScopeReads {
+    const i = this.instance;
+    const guard = <T>(p: Promise<T>, fallback: T) => (soft ? this.guard(p, fallback) : p);
+    return {
+      productsOf: (api) => guard(i.productsOf(api).then((list) => list.map((p) => p.id)), []),
+      policy: (s) => guard(i.policy(s).then((xml) => (xml === undefined ? undefined : this.parse(xml))), undefined),
+    };
   }
 
   /** Forgets what was worked out from earlier reads. */

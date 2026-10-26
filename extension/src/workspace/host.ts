@@ -17,23 +17,45 @@ export function workspaceIndex(cache: DocumentCache): { index: PolicyIndex<vscod
     findPolicyFiles: () => Promise.resolve(vscode.workspace.findFiles('**/*.xml', '**/{node_modules,.git,bin,obj}/**', 10000)),
     findNamedValueFiles: () => Promise.resolve(vscode.workspace.findFiles('**/namedValues/*/namedValueInformation.json', '**/node_modules/**', 5000)),
     readPolicy,
+    readText,
+    folders,
     openPolicies: () => vscode.workspace.textDocuments.filter(isPolicy).map((d) => ({ uri: d.uri, doc: cache.get(d) })),
     isOpen: (uri) => vscode.workspace.textDocuments.some((d) => d.uri.toString() === uri.toString()),
   };
   const index = new PolicyIndex(host);
   const changed = (d: vscode.TextDocument) => isPolicy(d) && index.documentChanged(d.uri, cache.get(d));
   const watcher = vscode.workspace.createFileSystemWatcher('**/*.xml');
+  // Which APIs each product holds, for the broader scopes around a policy in an extract.
+  const productApis = vscode.workspace.createFileSystemWatcher('**/products/*/apis.json');
   const disposable = vscode.Disposable.from(
     index,
     watcher,
-    watcher.onDidCreate((u) => index.fileCreated(u)),
-    watcher.onDidChange((u) => index.fileChanged(u)),
-    watcher.onDidDelete((u) => index.fileDeleted(u)),
+    productApis,
+    ...[watcher, productApis].flatMap((w) => [w.onDidCreate((u) => index.fileCreated(u)), w.onDidChange((u) => index.fileChanged(u)), w.onDidDelete((u) => index.fileDeleted(u))]),
     vscode.workspace.onDidChangeTextDocument((e) => changed(e.document)),
     vscode.workspace.onDidOpenTextDocument(changed),
     vscode.workspace.onDidCloseTextDocument((d) => index.documentClosed(d.uri)),
   );
   return { index, disposable };
+}
+
+/** A file's text, or undefined when it doesn't exist. */
+async function readText(uri: vscode.Uri): Promise<string | undefined> {
+  try {
+    return new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+  } catch (e) {
+    if (e instanceof vscode.FileSystemError && e.code === 'FileNotFound') return undefined;
+    throw e;
+  }
+}
+
+/** The names of the folders in `uri`; empty when it doesn't exist. */
+async function folders(uri: vscode.Uri): Promise<string[]> {
+  try {
+    return (await vscode.workspace.fs.readDirectory(uri)).filter(([, type]) => type & vscode.FileType.Directory).map(([name]) => name);
+  } catch {
+    return [];
+  }
 }
 
 /** APIM caps a fragment at 512 KB; a file far bigger than that isn't a policy. */
