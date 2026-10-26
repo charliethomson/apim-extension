@@ -33,7 +33,7 @@ fn main() -> kiln::Result<()> {
         // ── Gates ──────────────────────────────────────────────────────────────
         .pipeline(pipelines::extension::ci())
         .pipeline(pipelines::engine::ci())
-        .pipeline(pipelines::runner::ci())
+        .pipeline(pipelines::policy_tests::ci())
         .pipeline(pipelines::audit::ci())
         .pipeline(pipelines::repo::checks())
         // ── Delivery ───────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { findTestFiles, runTests } from '../src/run';
 import { ProcessRunner, runnerCommand } from '../src/runner';
 import { textReport } from '../src/report';
+import { fixturesDir } from '@apim-policy/fixtures';
 
 const built = join(__dirname, '..', '..', '..', 'runner', 'PolicyRunner', 'bin', 'Debug', 'net10.0', 'apim-policy-runner.dll');
 const runnerPath = process.env.APIM_POLICY_RUNNER ?? (existsSync(built) ? built : undefined);
@@ -32,5 +33,12 @@ describe.skipIf(!runnerPath)('against the real runner', () => {
       'sets the tenant from its named value',
       'stamps with no tier',
     ]);
+  }, 60_000);
+
+  it("passes the shared APIOps fixture's tests", async () => {
+    const apiops = join(fixturesDir, 'apiops');
+    const results = await runTests(await findTestFiles([apiops]), { runner: () => (runner ??= ProcessRunner.start(runnerCommand(runnerPath!))) });
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every((r) => r.status === 'passed'), textReport(results, apiops)).toBe(true);
   }, 60_000);
 });

@@ -14,6 +14,10 @@
     <AssemblyName>apim-policy-runner</AssemblyName>
     <RootNamespace>PolicyRunner</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Shipped inside the CLI's npm package and started with `dotnet`, so it's one portable build:
+         no native launcher for the OS it happened to be built on, and English messages only. -->
+    <UseAppHost>false</UseAppHost>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../packages/csharp-engine/assets/ApimContext.cs" Link="ApimContext.cs" />

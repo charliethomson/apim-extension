@@ -14,6 +14,8 @@ monotonic. Full doctrine: [versioning](https://standards.thmsn.dev/d/versioning)
   both on startup.
 - In CI, `extension.release` and `extension.prerelease` derive it with libci's
   `Version::derive` and hand it to `npm run package` as `RELEASE_VERSION`.
+- `npm run package:cli` does the same for the `apim-policy` CLI: the tarball is packed at the
+  derived version and `apim-policy --version` reports it with the commit.
 - Bump `MAJOR.MINOR` by tagging: `git tag v0.2.0 && git push --tags`.
 - Pushing a `v*` tag also publishes that build to the Marketplace (`extension.release`, in
   [`.kiln/src/pipelines/extension.rs`](.kiln/src/pipelines/extension.rs)).

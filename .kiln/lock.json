@@ -4,7 +4,7 @@
   "checkoutKey": "ssh_key",
   "stats": {
     "pipelineCount": 7,
-    "pipelineSourceLines": 629
+    "pipelineSourceLines": 666
   },
   "pipelines": [
     {
@@ -91,8 +91,8 @@
       ]
     },
     {
-      "name": "runner.ci",
-      "description": "policy test runner: build · tests · end to end with @apim-policy/testing",
+      "name": "policy-tests.ci",
+      "description": "policy test runner: build · tests · end to end · the packed CLI over the fixtures",
       "triggers": [
         {
           "event": "push",
@@ -102,8 +102,11 @@
           "paths": [
             "runner/**",
             "packages/testing/**",
+            "packages/fixtures/**",
+            "cli/**",
+            "scripts/ci/version.sh",
             "packages/csharp-engine/assets/ApimContext.cs",
-            ".kiln/src/pipelines/runner.rs",
+            ".kiln/src/pipelines/policy_tests.rs",
             ".kiln/src/pipelines/engine.rs",
             ".kiln/src/**",
             ".kiln/Cargo.toml",

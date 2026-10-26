@@ -1,0 +1,27 @@
+# The random-user fragment checks its arguments before it calls out. The calls themselves
+# (send-request and the cache) wait for the runner's mocks.
+namedValues:
+  random-user-cache-seconds: "60"
+request:
+  url: https://apim.example.net/random-users
+
+cases:
+  - name: turns away a page smaller than what it takes
+    request:
+      url: https://apim.example.net/random-users?count=5
+    expect:
+      response:
+        status: 400
+        reason: Invalid random-user arguments
+        headers:
+          Content-Type: application/problem+json
+        body:
+          json:
+            status: 400
+            errors: ["ru-arg-take (10) asks for more users than ru-arg-results (5) fetches"]
+      variables:
+        ru-ret-status: invalid-args
+      trace:
+        - source: random-user
+          contains: asks for more users
+      calls: []

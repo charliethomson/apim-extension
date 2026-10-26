@@ -1,9 +1,11 @@
 # Plan: unit tests for APIM policies, in CI
 
-Status: milestones 0 to 2 are built (2026-10-26): scope chains from an extract, the runner core in
-`runner/`, and `packages/testing` (test files, runs built from the extract, the runner client,
-the checks and the JUnit and Azure DevOps reports). [testing.md](testing.md) is the test file
-reference and says what the runner models. Next are milestone 3 (mocks) and 4 (the CLI). This replaces phase 3 of
+Status: milestones 0, 1, 2 and 4 are built (2026-10-26): scope chains from an extract, the runner
+core in `runner/`, `packages/testing`, and the `apim-policy` CLI in `cli/`, packed as an npm
+tarball with the runner inside and checked by `policy-tests.ci`. [testing.md](testing.md) is the
+test file reference. Milestone 4's done-when needs milestone 3: the random-user fixture's happy
+path calls `send-request` and the cache, so only its argument validation has a test so far.
+Installing on the agent (below) is still open: nothing is published. This replaces phase 3 of
 [apim-connection-plan.md](apim-connection-plan.md) with the decisions made since.
 
 APIOps publishes policy files and checks nothing about what they do. A policy's logic is only
@@ -150,8 +152,8 @@ what's modelled.
    **Done when** a test drives the random-user fixture end to end against a mocked randomuser.me,
    on an Azure DevOps hosted agent, and a broken expectation shows on the build's Tests tab with
    the policy line that caused it.
-5. **CI here.** A kiln pipeline that builds and tests the runner when `runner/` changes, and the
-   CLI's tests join `extension.ci`. Each new deliverable goes through `thmsn-new-component`.
+5. **CI here.** Done along the way as `policy-tests.ci`: the runner's tests, the testing
+   package against the built runner, the CLI's checks, and the packed CLI over the fixtures.
 
 Later: Test Explorer and a trace webview in the extension, snapshot expectations (save a run's
 output as the next run's expectations), a sample `azure-pipelines.yml` in the docs.

@@ -45,7 +45,7 @@ pub(super) fn dotnet_cache() -> Cache {
 }
 
 /// The pinned SDK, installed into the job's cache unless it's already there. Returns the
-/// `dotnet` binary. `runner.ci` builds on the same one.
+/// `dotnet` binary. `policy-tests.ci` builds on the same one.
 pub(super) fn install_dotnet(ctx: &Ctx) -> Result<String> {
     let root = ctx.cache_dir(dotnet_cache())?.join(DOTNET_SDK);
     let dotnet = root.join("dotnet").to_string();

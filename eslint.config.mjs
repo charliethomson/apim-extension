@@ -8,7 +8,7 @@ import tseslint from 'typescript-eslint';
 const root = import.meta.dirname;
 
 /** Every workspace: its directory, and the workspace packages it may import. */
-const workspaces = [...readdirSync(join(root, 'packages')).map((d) => join('packages', d)), 'extension', 'bench'].map((dir) => {
+const workspaces = [...readdirSync(join(root, 'packages')).map((d) => join('packages', d)), 'extension', 'cli', 'bench'].map((dir) => {
   const pkg = JSON.parse(readFileSync(join(root, dir, 'package.json'), 'utf8'));
   const declared = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
   return { dir: resolve(root, dir), name: pkg.name, declared: new Set(declared) };
@@ -60,7 +60,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/**/*.ts', 'extension/**/*.ts', 'bench/**/*.ts'],
+    files: ['packages/**/*.ts', 'extension/**/*.ts', 'cli/**/*.ts', 'bench/**/*.ts'],
     // Each package's vitest config extends the shared one at the root; that's build config.
     ignores: ['**/vitest.config.mts'],
     plugins: { boundaries },

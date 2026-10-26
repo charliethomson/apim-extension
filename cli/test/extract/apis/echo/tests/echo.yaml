@@ -1,0 +1,14 @@
+request:
+  url: https://apim.example.net/echo
+backend:
+  status: 200
+cases:
+  - name: passes
+    expect:
+      response: { status: 200 }
+  - name: fails
+    expect:
+      response: { status: 201 }
+  - name: breaks
+    request:
+      headers: { X-Break: "1" }

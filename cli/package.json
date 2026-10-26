@@ -1,0 +1,30 @@
+{
+  "name": "apim-policy-cli",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Unit tests for Azure API Management policies, run offline: apim-policy test.",
+  "license": "MIT",
+  "bin": {
+    "apim-policy": "dist/apim-policy.js"
+  },
+  "files": [
+    "dist/apim-policy.js",
+    "dist/runner/**",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@apim-policy/testing": "*"
+  },
+  "scripts": {
+    "build": "node esbuild.mjs && npm run build:runner",
+    "build:runner": "dotnet publish ../runner/PolicyRunner -c Release -o dist/runner --nologo -v quiet",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "package": "eval \"$(../scripts/ci/version.sh)\" && export RELEASE_VERSION COMMIT DIRTY && node esbuild.mjs && npm run build:runner && node pack.mjs"
+  }
+}

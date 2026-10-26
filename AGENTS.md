@@ -48,6 +48,11 @@ versioning and ignore the Rust-specific parts.
   binary. `extension/package.json` `version` stays a placeholder (`0.0.1`). `npm run package` derives
   `MAJOR.MINOR.<count>` with `scripts/ci/version.sh` and passes it to vsce, so the installed
   extension reports the real version.
+- **Second artifact:** `cli/` (`apim-policy-cli`, command `apim-policy`, id
+  `dev.thmsn.apim-policy.cli`) packs an npm tarball with `npm run package:cli`: the esbuild bundle
+  plus a portable Release publish of `runner/`, at the derived version (`cli/pack.mjs`;
+  `cli/package.json` keeps `0.0.1`). It isn't published anywhere yet: the cli-tool archetype says
+  the registry, but its users are Azure DevOps hosted agents, and how they get it is undecided.
 - **Identifier:** the VS Code extension id is `thmsn-dev.apim-policy` (marketplace form
   `publisher.name`). `dev.thmsn.apim-policy` is used anywhere a reverse-domain id fits.
 - **Testing:** unit tests run on vitest, per package. Every package under `packages/` has the 80%
@@ -64,10 +69,12 @@ versioning and ignore the Rust-specific parts.
   dropped from `main.rs` needs its `.yml` deleted by hand.
   - `extension.ci`: typecheck, lint, every package's unit tests with coverage, packaging and the
     integration suite in one job. `engine.ci`: on `packages/csharp-engine` changes, the stubs
-    build and the generated-assets drift check (.NET SDK 10.0.103, cached). `runner.ci`: on `runner/`,
-    `packages/testing` or `ApimContext.cs` changes, the policy test runner's build and xunit tests
-    on the same SDK, then `@apim-policy/testing`'s suite against that runner (its end-to-end test
-    skips wherever no runner is built). `audit.ci`: libci's `AuditGate` over `npm audit`, with `audit-exceptions.json`.
+    build and the generated-assets drift check (.NET SDK 10.0.103, cached). `policy-tests.ci`: on
+    `runner/`, `cli/`, `packages/testing`, the fixtures or `ApimContext.cs` changes, the runner's
+    build and xunit tests on the same SDK, `@apim-policy/testing`'s suite against that runner (its
+    end-to-end tests skip wherever no runner is built), the CLI's typecheck, lint and tests, and
+    the packed CLI over the fixtures. `extension.ci` doesn't watch `cli/`, so a CLI-only change
+    doesn't publish an extension pre-release. `audit.ci`: libci's `AuditGate` over `npm audit`, with `audit-exceptions.json`.
     `repo.checks`: `.woodpecker/` and the lockfile match a fresh emit, and `.kiln/` passes
     `cargo fmt --check` and clippy pedantic (`[lints]` in `.kiln/Cargo.toml`) with `-D warnings`.
     `extension.release`: publishes to the Visual Studio Marketplace on `v*` tags or by hand.

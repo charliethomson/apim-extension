@@ -8,7 +8,11 @@ and APIOps produce works as well as the escaped `xml` format, and it gives the C
 expressions (`@(...)` and `@{...}`) real IntelliSense from its own C# engine, with no .NET SDK or
 other extension needed.
 
-[Guide](docs/guide.md) · [Reference](docs/reference.md) · [Versioning](VERSIONING.md) · [Design](PLAN.md) · [Standards](https://standards.thmsn.dev)
+The same engine also runs **policy unit tests in CI**: `apim-policy test` sends requests through
+the policies in an APIOps extract offline, with the backend answered by the test, and reports in
+a form Azure DevOps shows on the build ([below](#policy-tests-in-ci)).
+
+[Guide](docs/guide.md) · [Policy tests](docs/testing.md) · [Reference](docs/reference.md) · [Versioning](VERSIONING.md) · [Design](PLAN.md) · [Standards](https://standards.thmsn.dev)
 
 <!-- screenshot: completion of context.Request members inside an attribute expression -->
 <!-- screenshot: structural diagnostics on a policy in the wrong section -->
@@ -105,6 +109,35 @@ Pushing is off until you allow the instance: the first push asks, and adds it to
 `apimPolicy.publish.allowedInstances` in the workspace settings. Allow only instances you change
 by hand, not ones a pipeline deploys. It needs a role that can write policies, such as *API
 Management Service Contributor*. In Restricted Mode a workspace's settings can't turn it on.
+
+## Policy tests in CI
+
+`apim-policy` (in [`cli/`](cli)) runs YAML tests kept in `tests/` folders beside the policies of an
+APIOps extract. Each test sends a request through a policy and its broader scopes (operation, API,
+product, global), answers the backend itself, and checks the response, variables, outgoing calls,
+trace and errors. The C# in expressions compiles at C# 7.3 against the real .NET libraries, so it
+behaves as on the gateway, and nothing talks to Azure. It needs Node 20+ and the .NET 10 runtime.
+
+It isn't published to a registry yet; build the package and install the tarball:
+
+```bash
+npm run package:cli
+```
+
+```bash
+npm install -g cli/apim-policy-cli-*.tgz
+```
+
+```bash
+apim-policy test --junit policy-tests.xml
+```
+
+Exit codes are 0 (all passed), 1 (a test failed) and 2 (a test couldn't run, or none were
+found). Under Azure Pipelines each failure is also an issue on the build at its file and line;
+[cli/README.md](cli/README.md) has the pipeline steps, and [docs/testing.md](docs/testing.md) the
+test format and what each policy does in the runner. Policies the runner doesn't model yet
+(`send-request`, the cache, rate limits and the rest of the plan's later milestones) fail the
+test as unsupported, naming the policy.
 
 ## How it works
 
@@ -224,6 +257,7 @@ own; `extension/` wires them to the editor. Dependencies point one way, top to b
 | [`packages/fixtures`](packages/fixtures) | sample policies the suites share (test-only) | nothing |
 | [`extension/`](extension) | the `.vsix`: manifest, providers, grammars, snippets, the integration suite | everything |
 | [`packages/testing`](packages/testing) | policy tests: the test file format, building a run from an APIOps extract, the runner process client, the expectation checks, and text, JUnit and Azure DevOps reports ([reference](docs/testing.md)) | core, document, workspace |
+| [`cli/`](cli) | `apim-policy test`: the CLI over `@apim-policy/testing`, bundled with esbuild and packed with the runner beside it | testing (and the runner, at build time) |
 | [`runner/`](runner) | the policy test runner (.NET, in progress): runs a request through a policy and its broader scopes, with the C# compiled by Roslyn at 7.3 and the outside world mocked ([plan](docs/policy-testing-plan.md), [what it models](docs/testing.md)) | the engine's `ApimContext.cs` |
 | [`bench/`](bench) | hot-path benchmarks | the packages it times |
 
@@ -278,10 +312,12 @@ changes nothing:
 dotnet build packages/csharp-engine/stubs-check
 ```
 
-`runner.ci` runs when `runner/`, `packages/testing` or the engine's `ApimContext.cs` changes: it
-builds the policy test runner and runs its tests on the same SDK, then runs the testing package's
-suite against the runner it built. That suite's end-to-end test is skipped where no runner is
-built (in `extension.ci`, say), so build one before running it yourself:
+`policy-tests.ci` runs when `runner/`, `cli/`, `packages/testing`, the fixtures or the engine's
+`ApimContext.cs` change. It builds the policy test runner and runs its tests on the same SDK,
+runs the testing package's suite against the runner it built, checks the CLI (typecheck, lint,
+tests), then packs the CLI and runs the packed build over every fixture test. The testing
+package's end-to-end tests are skipped where no runner is built (in `extension.ci`, say), so
+build one before running them yourself:
 
 ```bash
 dotnet test runner/PolicyRunner.slnx
@@ -289,6 +325,14 @@ dotnet test runner/PolicyRunner.slnx
 
 ```bash
 npm test -w @apim-policy/testing
+```
+
+```bash
+npm run build -w apim-policy-cli
+```
+
+```bash
+node cli/dist/apim-policy.js test packages/fixtures/files/apiops
 ```
 
 `repo.checks` runs when `.kiln/` or `.woodpecker/` changes: the generated files and lockfile

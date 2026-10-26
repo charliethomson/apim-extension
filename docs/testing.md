@@ -7,7 +7,9 @@ behave as they do on the gateway (apart from .NET Framework 4.8 vs modern .NET, 
 compatibility check flags). Policy semantics are rebuilt from the Learn pages, so this page says
 what each one does here. [`packages/testing`](../packages/testing) reads the test files, builds
 each run from the APIOps extract and checks the results. The design is in
-[policy-testing-plan.md](policy-testing-plan.md). The CLI isn't built yet.
+[policy-testing-plan.md](policy-testing-plan.md). The `apim-policy test` command in
+[`cli/`](../cli) runs them; [its README](../cli/README.md) covers installing it and the Azure
+Pipelines steps.
 
 ## Test files
 
