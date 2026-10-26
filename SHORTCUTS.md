@@ -57,6 +57,19 @@ the commit, newest first, with a link to the run; the query keeps the newest per
 
 _Verified: 2026-10-23_
 
+## Why did a Woodpecker pipeline error with no steps?
+
+```sh
+C="$HOME/Library/Application Support/woodpecker/contexts.json"; S=$(jq -r .contexts.default.server_url "$C"); T=$(jq -r .contexts.default.token "$C"); curl -fsS -H "Authorization: Bearer $T" "$S/api/repos/21/pipelines/<number>" | jq '{status, errors, workflows: [.workflows[]? | {name, state}]}'
+```
+
+`woodpecker-cli pipeline ls charliethomson/apim-extension` lists runs, and `pipeline ps` lists
+steps. A run in `error` with no steps was refused before it started, and the CLI doesn't show
+why: the reason is in the API's `errors` field (repo id 21). One refused workflow refuses the
+whole push, gates included. A secret's allowed events are under `woodpecker-cli repo secret ls`.
+
+_Verified: 2026-10-26_
+
 ## Which build is a running VS Code using?
 
 The first line of the **APIM Policy** output channel (View → Output) once a policy is open:
