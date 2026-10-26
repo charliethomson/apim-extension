@@ -334,6 +334,8 @@ MIT-licensed copies used only by the tests; see [their notice](extension/test/gr
 - [docs/fragment-headers.md](docs/fragment-headers.md): documenting a fragment's variables.
 - [docs/apim-connection-plan.md](docs/apim-connection-plan.md): the plan for reading an instance,
   and running policies offline.
+- [docs/policy-testing-plan.md](docs/policy-testing-plan.md): the plan for unit-testing policies
+  in CI.
 - [docs/limitations.md](docs/limitations.md): known limitations, and things that will bite you
   when working on it.
 - [PLAN.md](PLAN.md): the original design, including the C# extension approach it replaced.

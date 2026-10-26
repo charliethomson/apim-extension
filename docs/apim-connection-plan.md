@@ -111,6 +111,9 @@ integration test runs only when `APIM_IT_INSTANCE` is set, against a Consumption
 
 ## Phase 3: simulate a request offline (opt-in)
 
+Superseded by [policy-testing-plan.md](policy-testing-plan.md), which settles the open questions
+below and targets CI first. Kept for the history.
+
 A test runner for policy logic: send a request through a policy, with its outer scopes, and see
 the response, the variables after every step and which branches ran. Like APIM's trace, without
 an instance. A test runner with mocks, not a gateway emulator.
