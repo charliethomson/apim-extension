@@ -115,11 +115,16 @@ The publish step's log is the last command's output:
 woodpecker-cli pipeline ps charliethomson/apim-extension <number>
 ```
 
-`409 Conflict ... Cannot publish over previously staged version` means that version is waiting in
-npm's staged publishing: taken, but not public until approved. `npm stage list
-@charliethomson/apim-cli` (logged in) shows it; approve it with 2FA on npmjs.com (the package's
-**Staged Packages** tab) or `npm stage approve <stage-id>`, or reject it and rerun the pipeline.
-A run killed mid-publish (a newer push cancelling it) can leave one behind.
-`npm view @charliethomson/apim-cli versions dist-tags` shows what's public.
+`409 Conflict ... Cannot publish over previously staged version` means npm already has an upload of
+that version in hand: a run killed mid-publish (a newer push cancelling it) can leave one, and npm
+can take a few minutes to finish it. Check before acting: if it turns up public, there's nothing to
+do; if it sits in the package's **Staged Packages** tab on npmjs.com, approve it there (2FA) or
+reject it and rerun.
+
+What's public, straight from the registry (`npm view` caches a 404 for a while):
+
+```sh
+curl -s https://registry.npmjs.org/@charliethomson%2fapim-cli | jq '{"dist-tags": .["dist-tags"], versions: (.versions | keys)}'
+```
 
 _Verified: 2026-10-26_
