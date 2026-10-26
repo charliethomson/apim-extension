@@ -102,6 +102,7 @@ namespace PolicyRunner
             {
                 Prepare();
                 ctx = new Context(input, message => result.Trace.Add(new TraceOutput { Source = "context.Trace", Message = message }));
+                foreach (var kv in input.Variables) ctx.VariableMap[kv.Key] = FromJson(kv.Value);
                 Pipeline();
                 Finish();
             }
@@ -180,8 +181,10 @@ namespace PolicyRunner
             }
             catch (PolicyError e)
             {
+                // on-error starts from the gateway's 500 for the error, which it can change or replace.
                 ctx.LastErrorValue = e.Error;
                 result.Error = e.Output;
+                ctx.Response = DefaultError();
                 try
                 {
                     RunSection(0, "on-error");
@@ -192,9 +195,8 @@ namespace PolicyRunner
                 }
                 catch (PolicyError)
                 {
-                    ctx.Response = null;
+                    ctx.Response = DefaultError();
                 }
-                ctx.Response ??= DefaultError();
             }
         }
 
@@ -652,6 +654,27 @@ namespace PolicyRunner
                 };
             }
             foreach (var kv in ctx.VariableMap) result.Variables[kv.Key] = new VariableOutput { Type = TypeName(kv.Value), Value = ToJson(kv.Value) };
+        }
+
+        /// <summary>A preset variable's .NET value.</summary>
+        private static object? FromJson(JToken token)
+        {
+            switch (token.Type)
+            {
+                case JTokenType.String:
+                    return (string?)token;
+                case JTokenType.Integer:
+                    var n = (long)token;
+                    return n >= int.MinValue && n <= int.MaxValue ? (object)(int)n : n;
+                case JTokenType.Float:
+                    return (double)token;
+                case JTokenType.Boolean:
+                    return (bool)token;
+                case JTokenType.Null:
+                    return null;
+                default:
+                    return token.DeepClone();
+            }
         }
 
         private static string TypeName(object? value) => value == null ? "null" : value is Response ? "IResponse" : value.GetType().Name;

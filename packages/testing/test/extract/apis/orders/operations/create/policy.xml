@@ -1,0 +1,19 @@
+<policies>
+    <inbound>
+        <base />
+        <set-variable name="order" value="@(context.Request.Body.As<JObject>(preserveContent: true))" />
+        <set-header name="X-Order-Id" exists-action="override">
+            <value>@(((JObject)context.Variables["order"])["id"].ToString())</value>
+        </set-header>
+        <rewrite-uri template="/v2/orders" />
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

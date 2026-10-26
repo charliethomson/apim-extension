@@ -1,0 +1,25 @@
+name: sends the order on with its id
+policy: operations/create
+product: gold
+request:
+  method: post
+  url: /orders
+  headers:
+    Content-Type: application/json
+  body:
+    file: data/order.json
+backend:
+  status: 201
+  body: '{"created": true}'
+expect:
+  response:
+    status: 201
+  variables:
+    order: { id: 42 }
+  calls:
+    - method: POST
+      url: https://backend.example.net/api/v2/orders
+      headers:
+        X-Order-Id: "42"
+      body:
+        json: { id: 42, items: [ apple ] }

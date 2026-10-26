@@ -1,0 +1,31 @@
+<policies>
+    <inbound>
+        <base />
+        <include-fragment fragment-id="stamp" />
+        <choose>
+            <when condition="@(context.Request.Headers.GetValueOrDefault("X-Reject", "") == "yes")">
+                <return-response>
+                    <set-status code="403" reason="Rejected" />
+                    <set-body>@{
+                        return new JObject { ["error"] = "rejected", ["tenant"] = (string)context.Variables["tenant"] }.ToString();
+                    }</set-body>
+                </return-response>
+            </when>
+        </choose>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+        <set-body>@{
+            var body = context.Response.Body.As<JObject>();
+            body["tenant"] = (string)context.Variables["tenant"];
+            body["tier"] = context.Variables.GetValueOrDefault<string>("tier", "none");
+            return body.ToString();
+        }</set-body>
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

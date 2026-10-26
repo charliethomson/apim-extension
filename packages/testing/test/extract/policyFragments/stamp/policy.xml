@@ -1,0 +1,11 @@
+<!--
+  Stamps the request with the tenant and tier.
+
+  @in  tenant  The tenant name.
+  @in  tier    The product tier, when there is one.
+-->
+<fragment>
+    <set-header name="X-Stamp" exists-action="override">
+        <value>@((string)context.Variables["tenant"] + "/" + context.Variables.GetValueOrDefault<string>("tier", "none"))</value>
+    </set-header>
+</fragment>

@@ -52,6 +52,11 @@ namespace PolicyRunner
         public Dictionary<string, FragmentInput> Fragments { get; set; } = new Dictionary<string, FragmentInput>();
         /// <summary>Named values by display name, matched ignoring case as APIM does.</summary>
         public Dictionary<string, string> NamedValues { get; set; } = new Dictionary<string, string>();
+        /// <summary>
+        /// Variables set before the run, as a fragment's inputs would be: strings, numbers and bools as
+        /// themselves (whole numbers as int when they fit), objects as JObject, lists as JArray.
+        /// </summary>
+        public Dictionary<string, JToken> Variables { get; set; } = new Dictionary<string, JToken>();
         public RequestInput Request { get; set; } = new RequestInput();
         /// <summary>What forward-request gets back; a run that forwards without one fails.</summary>
         public ResponseInput? Backend { get; set; }

@@ -1,0 +1,14 @@
+name: stamps with no tier
+variables:
+  tenant: t1
+request:
+  url: https://apim.example.net/anything
+context:
+  api:
+    name: Fragment host
+backend:
+  status: 204
+expect:
+  calls:
+    - headers:
+        X-Stamp: t1/none

@@ -4,7 +4,7 @@
   "checkoutKey": "ssh_key",
   "stats": {
     "pipelineCount": 7,
-    "pipelineSourceLines": 607
+    "pipelineSourceLines": 629
   },
   "pipelines": [
     {
@@ -92,7 +92,7 @@
     },
     {
       "name": "runner.ci",
-      "description": "policy test runner: build · tests",
+      "description": "policy test runner: build · tests · end to end with @apim-policy/testing",
       "triggers": [
         {
           "event": "push",
@@ -101,6 +101,7 @@
           ],
           "paths": [
             "runner/**",
+            "packages/testing/**",
             "packages/csharp-engine/assets/ApimContext.cs",
             ".kiln/src/pipelines/runner.rs",
             ".kiln/src/pipelines/engine.rs",
@@ -119,11 +120,15 @@
           "name": "dotnet",
           "agent": "linux",
           "image": "rust:1-bookworm",
+          "env": {
+            "CI": "true"
+          },
           "caches": [
             {
               "key": "dotnet-sdk",
               "maxGb": 2
-            }
+            },
+            "node:npm-modules"
           ]
         }
       ]

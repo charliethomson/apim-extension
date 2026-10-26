@@ -152,6 +152,34 @@ namespace PolicyRunner.Tests
         }
 
         [Fact]
+        public void HandsOnErrorTheErrorResponseToChange()
+        {
+            var r = Engine.Run(Run(("api", Policy(
+                outbound: "<set-variable name='bad' value='@(context.Response.Body.As&lt;JObject&gt;())' />",
+                onError: "<set-header name='X-Reason' exists-action='override'><value>@(context.LastError.Reason)</value></set-header>")), ("global", null)));
+            Assert.Equal(500, r.Response!.Status);
+            Assert.Equal(new[] { "ExpressionValueEvaluationFailure" }, r.Response.Headers["X-Reason"]);
+            Assert.Equal("outbound", r.Error!.Section);
+        }
+
+        [Fact]
+        public void StartsWithTheVariablesATestSets()
+        {
+            var run = Run(("api", Policy("<set-variable name='out' value='@((string)context.Variables[\"s\"] + (int)context.Variables[\"i\"] + (long)context.Variables[\"l\"] + (double)context.Variables[\"d\"] + (bool)context.Variables[\"b\"] + ((JObject)context.Variables[\"o\"])[\"k\"] + ((JArray)context.Variables[\"a\"]).Count + (context.Variables[\"n\"] == null))' />")), ("global", null));
+            run.Variables["s"] = "x";
+            run.Variables["i"] = 1;
+            run.Variables["l"] = 5000000000L;
+            run.Variables["d"] = 1.5;
+            run.Variables["b"] = true;
+            run.Variables["o"] = new JObject { ["k"] = "v" };
+            run.Variables["a"] = new JArray(1, 2);
+            run.Variables["n"] = JValue.CreateNull();
+            var r = Engine.Run(run);
+            Assert.Null(r.Failure);
+            Assert.Equal("x150000000001.5Truev2True", (string?)r.Variables["out"].Value);
+        }
+
+        [Fact]
         public void AnswersAnUnhandledErrorWithA500()
         {
             var r = Engine.Run(Run(("api", Policy("<set-variable name='bad' value='@(int.Parse(\"x\"))' />")), ("global", null)));

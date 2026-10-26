@@ -1,0 +1,18 @@
+<policies>
+    <inbound>
+        <set-variable name="tenant" value="{{tenant-name}}" />
+    </inbound>
+    <backend>
+        <forward-request />
+    </backend>
+    <outbound>
+        <set-header name="X-Powered-By" exists-action="override">
+            <value>apim</value>
+        </set-header>
+    </outbound>
+    <on-error>
+        <set-header name="X-Error" exists-action="override">
+            <value>@(context.LastError.Reason)</value>
+        </set-header>
+    </on-error>
+</policies>

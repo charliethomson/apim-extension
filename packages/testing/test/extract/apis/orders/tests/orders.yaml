@@ -1,0 +1,65 @@
+product: gold
+request:
+  url: /list?page=2
+backend:
+  status: 200
+  headers:
+    Content-Type: application/json
+  body:
+    json: { orders: [ { id: 1 } ] }
+
+cases:
+  - name: forwards stamped and decorates the response
+    expect:
+      response:
+        status: 200
+        headers:
+          X-Powered-By: apim
+        body:
+          json: { orders: [ { id: 1 } ], tenant: contoso, tier: gold }
+      variables:
+        tenant: contoso
+        tier: gold
+      calls:
+        - method: GET
+          url: https://backend.example.net/api/list?page=2
+          headers:
+            X-Stamp: contoso/gold
+      error: null
+
+  - name: rejects when asked to
+    request:
+      headers:
+        X-Reject: "yes"
+    expect:
+      response:
+        status: 403
+        reason: Rejected
+        body:
+          json: { error: rejected, tenant: contoso }
+      calls: []
+
+  - name: has no tier through silver
+    product: silver
+    namedValues:
+      tenant-name: fabrikam
+    expect:
+      response:
+        body:
+          json: { orders: [ { id: 1 } ], tenant: fabrikam, tier: none }
+      calls:
+        - headers:
+            X-Stamp: fabrikam/none
+
+  - name: answers an error from the backend body with on-error
+    backend:
+      status: 200
+      body: not json
+    expect:
+      response:
+        status: 500
+        headers:
+          X-Error: ExpressionValueEvaluationFailure
+      error:
+        source: set-body
+        section: outbound

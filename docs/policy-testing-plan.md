@@ -1,8 +1,9 @@
 # Plan: unit tests for APIM policies, in CI
 
-Status: milestones 0 and 1 are built (2026-10-26): scope chains from an extract, and the runner
-core in `runner/` with the executed tier and `forward-request` answered from the test.
-[testing.md](testing.md) says what it models. Next is milestone 2, the TypeScript side. This replaces phase 3 of
+Status: milestones 0 to 2 are built (2026-10-26): scope chains from an extract, the runner core in
+`runner/`, and `packages/testing` (test files, runs built from the extract, the runner client,
+the checks and the JUnit and Azure DevOps reports). [testing.md](testing.md) is the test file
+reference and says what the runner models. Next are milestone 3 (mocks) and 4 (the CLI). This replaces phase 3 of
 [apim-connection-plan.md](apim-connection-plan.md) with the decisions made since.
 
 APIOps publishes policy files and checks nothing about what they do. A policy's logic is only
@@ -97,7 +98,7 @@ expect:
     status: 200
     headers: { Content-Type: application/json }
     body:
-      json: { results: [ { nat: GB } ] }   # a subset match
+      json: { results: [ { nat: GB } ] }   # objects match as subsets, lists item by item
   variables:
     ru-arg-results: "5"
   calls:
@@ -107,8 +108,8 @@ expect:
 ```
 
 A file can hold `cases:`, a list of tests sharing the fields above it. Bodies are `text`, `json`
-or `file`. The exact schema is settled in milestone 2 and published as a JSON Schema, so editors
-with the YAML extension complete it.
+or `file`. The schema as built is in [testing.md](testing.md); a JSON Schema for editors with the
+YAML extension is still to do.
 
 ## Policies, in tiers
 

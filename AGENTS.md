@@ -64,8 +64,10 @@ versioning and ignore the Rust-specific parts.
   dropped from `main.rs` needs its `.yml` deleted by hand.
   - `extension.ci`: typecheck, lint, every package's unit tests with coverage, packaging and the
     integration suite in one job. `engine.ci`: on `packages/csharp-engine` changes, the stubs
-    build and the generated-assets drift check (.NET SDK 10.0.103, cached). `runner.ci`: on `runner/`
-    or `ApimContext.cs` changes, the policy test runner's build and xunit tests on the same SDK. `audit.ci`: libci's `AuditGate` over `npm audit`, with `audit-exceptions.json`.
+    build and the generated-assets drift check (.NET SDK 10.0.103, cached). `runner.ci`: on `runner/`,
+    `packages/testing` or `ApimContext.cs` changes, the policy test runner's build and xunit tests
+    on the same SDK, then `@apim-policy/testing`'s suite against that runner (its end-to-end test
+    skips wherever no runner is built). `audit.ci`: libci's `AuditGate` over `npm audit`, with `audit-exceptions.json`.
     `repo.checks`: `.woodpecker/` and the lockfile match a fresh emit, and `.kiln/` passes
     `cargo fmt --check` and clippy pedantic (`[lints]` in `.kiln/Cargo.toml`) with `-D warnings`.
     `extension.release`: publishes to the Visual Studio Marketplace on `v*` tags or by hand.

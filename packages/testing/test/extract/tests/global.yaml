@@ -1,0 +1,12 @@
+name: sets the tenant from its named value
+request:
+  url: https://apim.example.net/
+backend:
+  status: 204
+expect:
+  variables:
+    tenant: contoso
+  response:
+    status: 204
+    headers:
+      X-Powered-By: apim
