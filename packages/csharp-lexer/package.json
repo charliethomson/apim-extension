@@ -1,5 +1,5 @@
 {
-  "name": "@apim-policy/csharp-lexer",
+  "name": "@charliethomson/apim-csharp-lexer",
   "version": "0.0.0",
   "private": true,
   "description": "The structural C# lexer: where an embedded expression ends, and the tokens the syntactic lints read.",
@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@apim-policy/core": "*"
+    "@charliethomson/apim-core": "*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

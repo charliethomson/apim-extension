@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parse } from '@apim-policy/document';
+import { parse } from '@charliethomson/apim-document';
 import { chainsFor, outerVariables } from '../src/scopes';
-import { scopeLabel, type Scope } from '@apim-policy/core';
+import { scopeLabel, type Scope } from '@charliethomson/apim-core';
 
 describe('chainsFor', () => {
   it('wraps an operation in its API, each product, then global', () => {

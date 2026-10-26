@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import { ApimInstance, ArmClient, type Backend, describeError, isAllowedInstance, type NamedValue, parseServiceId } from '@apim-policy/azure';
+import { ApimInstance, ArmClient, type Backend, describeError, isAllowedInstance, type NamedValue, parseServiceId } from '@charliethomson/apim-azure';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 import { log } from '../log';
-import type { Document } from '@apim-policy/document';
-import type { IncludeSets, OuterSet } from '@apim-policy/analysis';
-import { instancePath, scopeLabel, type Scope } from '@apim-policy/core';
-import { documentScope, INSTANCE_SCHEME, InstanceReader, type InstanceSource, type RemoteFragment, type ScopeReads, unknownNamedValues } from '@apim-policy/workspace';
+import type { Document } from '@charliethomson/apim-document';
+import type { IncludeSets, OuterSet } from '@charliethomson/apim-analysis';
+import { instancePath, scopeLabel, type Scope } from '@charliethomson/apim-core';
+import { documentScope, INSTANCE_SCHEME, InstanceReader, type InstanceSource, type RemoteFragment, type ScopeReads, unknownNamedValues } from '@charliethomson/apim-workspace';
 
 const SCOPES_KEY = 'apimPolicy.scopes';
 

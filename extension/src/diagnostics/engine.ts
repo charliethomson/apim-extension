@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
-import type { CSharpEngine } from '@apim-policy/csharp-engine';
+import type { CSharpEngine } from '@charliethomson/apim-csharp-engine';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
-import { resultTypes } from '@apim-policy/analysis';
-import type { Catalog } from '@apim-policy/catalog';
-import type { ShapeService } from '@apim-policy/workspace';
+import { resultTypes } from '@charliethomson/apim-analysis';
+import type { Catalog } from '@charliethomson/apim-catalog';
+import type { ShapeService } from '@charliethomson/apim-workspace';
 
 /**
  * C# errors from the built-in engine: syntax, unknown names and members, argument counts and

@@ -8,7 +8,7 @@
  */
 
 import type { ArmClient } from './arm';
-import type { Scope } from '@apim-policy/core';
+import type { Scope } from '@charliethomson/apim-core';
 
 export interface NamedValue {
   id: string;

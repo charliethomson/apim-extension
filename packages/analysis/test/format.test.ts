@@ -1,8 +1,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { fixturesDir as fixtures } from '@apim-policy/fixtures';
-import { parse } from '@apim-policy/document';
+import { fixturesDir as fixtures } from '@charliethomson/apim-fixtures';
+import { parse } from '@charliethomson/apim-document';
 import { applyEdits, codeLevels, formatPolicy } from '../src/format';
 
 const SPACES = { tabSize: 4, insertSpaces: true };

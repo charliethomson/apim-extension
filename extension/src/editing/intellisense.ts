@@ -5,12 +5,12 @@
  */
 
 import * as vscode from 'vscode';
-import { type CSharpEngine, type EntryKind, type JsonShape, NO_SHAPES, type ShapeEnv } from '@apim-policy/csharp-engine';
+import { type CSharpEngine, type EntryKind, type JsonShape, NO_SHAPES, type ShapeEnv } from '@charliethomson/apim-csharp-engine';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
-import { type Document, escapeForDocument, type Expression, expressionAt, isEscapedFormat, nodeAt } from '@apim-policy/document';
-import { type Catalog, namesVariable, xmlCompletions, type XmlItem, type XmlItemKind } from '@apim-policy/catalog';
-import { COMMON_HEADERS, type FragmentDoc, keyAccessAt, summarize, variableNameSuggestions } from '@apim-policy/analysis';
-import { type PolicyIndex, type ShapeService, within } from '@apim-policy/workspace';
+import { type Document, escapeForDocument, type Expression, expressionAt, isEscapedFormat, nodeAt } from '@charliethomson/apim-document';
+import { type Catalog, namesVariable, xmlCompletions, type XmlItem, type XmlItemKind } from '@charliethomson/apim-catalog';
+import { COMMON_HEADERS, type FragmentDoc, keyAccessAt, summarize, variableNameSuggestions } from '@charliethomson/apim-analysis';
+import { type PolicyIndex, type ShapeService, within } from '@charliethomson/apim-workspace';
 
 export interface IntellisenseDeps {
   cache: DocumentCache;

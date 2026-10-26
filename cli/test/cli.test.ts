@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { RunInput, Runner, RunResult } from '@apim-policy/testing';
+import type { RunInput, Runner, RunResult } from '@charliethomson/apim-testing';
 import { type Io, main } from '../src/cli';
 
 const extract = join(__dirname, 'extract');

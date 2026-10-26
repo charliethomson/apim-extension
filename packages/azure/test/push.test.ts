@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { gatewayErrors, pushFormat, samePolicy } from '../src/push';
-import { parse } from '@apim-policy/document';
+import { parse } from '@charliethomson/apim-document';
 
 describe('push helpers', () => {
   it('sends a policy in the format it is written in', () => {

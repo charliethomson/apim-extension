@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parse } from '@apim-policy/document';
+import { parse } from '@charliethomson/apim-document';
 import { draftModel, headerExpansions, inferredTypes, readHeaderComment, renderHeader } from '../src/headerShape';
 import { summarize } from '../src/variables';
 

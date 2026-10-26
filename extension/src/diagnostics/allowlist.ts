@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { type Allowlist, type CSharpEngine, lintAllowedTypes, type LintFinding, lintReferences } from '@apim-policy/csharp-engine';
+import { type Allowlist, type CSharpEngine, lintAllowedTypes, type LintFinding, lintReferences } from '@charliethomson/apim-csharp-engine';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
-import type { OffsetRange } from '@apim-policy/core';
+import type { OffsetRange } from '@charliethomson/apim-core';
 
 interface Finding {
   range: OffsetRange;

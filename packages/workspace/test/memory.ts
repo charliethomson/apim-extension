@@ -1,9 +1,9 @@
 /** An in-memory editor for the workspace layer: files on "disk", open documents, an instance. */
 
-import type { Backend, NamedValue } from '@apim-policy/azure';
-import { instancePath, type Scope } from '@apim-policy/core';
-import { type Document, looksLikePolicy, parse } from '@apim-policy/document';
-import { outerVariables as placeOuter, summarize } from '@apim-policy/analysis';
+import type { Backend, NamedValue } from '@charliethomson/apim-azure';
+import { instancePath, type Scope } from '@charliethomson/apim-core';
+import { type Document, looksLikePolicy, parse } from '@charliethomson/apim-document';
+import { outerVariables as placeOuter, summarize } from '@charliethomson/apim-analysis';
 import type { InstanceSource, RemoteFragment, WorkspaceHost } from '../src/host';
 
 /** URIs are plain strings: `file:///ws/a.xml`, `apim-edit://inst/inst/fragments/f.fragment.xml`. */

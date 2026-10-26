@@ -1,4 +1,4 @@
-import { SourceMap, SourceMapBuilder } from '@apim-policy/core';
+import { SourceMap, SourceMapBuilder } from '@charliethomson/apim-core';
 
 const NAMED: Record<string, string> = { quot: '"', apos: "'", lt: '<', gt: '>', amp: '&' };
 

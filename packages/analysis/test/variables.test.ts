@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { fixture } from '@apim-policy/fixtures';
-import { escapeForDocument, isEscapedFormat, parse } from '@apim-policy/document';
+import { fixture } from '@charliethomson/apim-fixtures';
+import { escapeForDocument, isEscapedFormat, parse } from '@charliethomson/apim-document';
 import { keyAccessAt, knownVariables, summarize } from '../src/variables';
 
 describe('summarize', () => {

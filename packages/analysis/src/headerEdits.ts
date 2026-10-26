@@ -3,8 +3,8 @@
  * offsets. The editor turns them into its own edits; snippet text uses `${1:…}` tab stops.
  */
 
-import { Lines, type OffsetRange } from '@apim-policy/core';
-import { type Document, escapeForDocument, isEscapedFormat, nodeAt } from '@apim-policy/document';
+import { Lines, type OffsetRange } from '@charliethomson/apim-core';
+import { type Document, escapeForDocument, isEscapedFormat, nodeAt } from '@charliethomson/apim-document';
 import { propertiesOfTypeText, type FragmentDoc, type FragmentVariable, type TypedefDoc } from './fragmentDoc';
 import { insertTypedefs, readHeaderComment, renderHeader, tabStops, type HeaderEntry, type HeaderModel } from './headerShape';
 import { emptyValueFor, type UnguardedRead } from './variableSafety';

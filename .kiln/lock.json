@@ -3,8 +3,8 @@
   "repo": "apim-extension",
   "checkoutKey": "ssh_key",
   "stats": {
-    "pipelineCount": 7,
-    "pipelineSourceLines": 666
+    "pipelineCount": 9,
+    "pipelineSourceLines": 822
   },
   "pipelines": [
     {
@@ -272,6 +272,89 @@
           ],
           "secrets": [
             "vsce_pat"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cli.prerelease",
+      "description": "pack, check and publish main to npm under next",
+      "triggers": [
+        {
+          "event": "push",
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "cli/**",
+            "packages/**",
+            "runner/**",
+            "package.json",
+            "package-lock.json",
+            "scripts/ci/version.sh",
+            ".kiln/src/pipelines/cli.rs",
+            ".kiln/src/pipelines/engine.rs",
+            ".kiln/src/pipelines/mod.rs",
+            ".kiln/src/main.rs",
+            ".kiln/Cargo.toml",
+            ".kiln/Cargo.lock"
+          ]
+        }
+      ],
+      "serialize": "cancel",
+      "jobs": [
+        {
+          "name": "publish",
+          "agent": "linux",
+          "image": "rust:1-bookworm",
+          "env": {
+            "CI": "true"
+          },
+          "caches": [
+            {
+              "key": "dotnet-sdk",
+              "maxGb": 2
+            },
+            "node:npm-modules"
+          ],
+          "secrets": [
+            "npm_token"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cli.release",
+      "description": "pack, check and publish the CLI to npm under latest",
+      "triggers": [
+        {
+          "event": "tag",
+          "patterns": [
+            "v*"
+          ]
+        },
+        {
+          "event": "manual"
+        }
+      ],
+      "serialize": "finish",
+      "jobs": [
+        {
+          "name": "publish",
+          "agent": "linux",
+          "image": "rust:1-bookworm",
+          "env": {
+            "CI": "true"
+          },
+          "caches": [
+            {
+              "key": "dotnet-sdk",
+              "maxGb": 2
+            },
+            "node:npm-modules"
+          ],
+          "secrets": [
+            "npm_token"
           ]
         }
       ]

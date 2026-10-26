@@ -1,7 +1,7 @@
 import { open } from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { looksLikePolicy, PROLOG_LIMIT, scanRoot } from '@apim-policy/document';
-import { PolicyIndex, type WorkspaceHost } from '@apim-policy/workspace';
+import { looksLikePolicy, PROLOG_LIMIT, scanRoot } from '@charliethomson/apim-document';
+import { PolicyIndex, type WorkspaceHost } from '@charliethomson/apim-workspace';
 import { LANGUAGE_ID, type DocumentCache } from '../documents';
 
 /** The policy index over VS Code's workspace, kept current from its file and document events. */

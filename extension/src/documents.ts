@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { type Document, parse } from '@apim-policy/document';
+import { type Document, parse } from '@charliethomson/apim-document';
 
 export const LANGUAGE_ID = 'apim-policy';
 

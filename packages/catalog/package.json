@@ -1,5 +1,5 @@
 {
-  "name": "@apim-policy/catalog",
+  "name": "@charliethomson/apim-catalog",
   "version": "0.0.0",
   "private": true,
   "description": "What APIM accepts: the policy catalog, structural validation and XML completion.",
@@ -8,11 +8,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@apim-policy/core": "*",
-    "@apim-policy/document": "*"
+    "@charliethomson/apim-core": "*",
+    "@charliethomson/apim-document": "*"
   },
   "devDependencies": {
-    "@apim-policy/fixtures": "*"
+    "@charliethomson/apim-fixtures": "*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

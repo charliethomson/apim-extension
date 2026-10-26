@@ -21,7 +21,7 @@
  * header and the `@in`/`@out` expansions write it.
  */
 
-import type { Document } from '@apim-policy/document';
+import type { Document } from '@charliethomson/apim-document';
 import { BALANCED, declarationOf, headerCommentOf, inputUse, readsIn } from './fragmentDoc';
 import { summarize, type PolicySummary } from './variables';
 

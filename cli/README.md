@@ -10,21 +10,17 @@ does on the gateway. Nothing talks to Azure.
 
 ## Install
 
-It isn't published to a registry yet. Build the package from this repo, then install the tarball:
-
 ```bash
-npm ci
+npx -y @charliethomson/apim-cli test
 ```
 
-```bash
-npm run package:cli
-```
+That runs the latest release without installing anything. Pin a version in CI
+(`@charliethomson/apim-cli@0.1`), or install it once with `npm install -g @charliethomson/apim-cli`;
+re-running the install upgrades it. Every push to `main` is published under the `next` tag too
+(`@charliethomson/apim-cli@next`).
 
-```bash
-npm install -g cli/apim-policy-cli-*.tgz
-```
-
-It needs Node 20 or later and the .NET 10 runtime (`dotnet` on `PATH`).
+It needs Node 20 or later and the .NET 10 runtime (`dotnet` on `PATH`). Azure DevOps and GitHub
+hosted agents have both.
 
 ## Use
 
@@ -78,18 +74,11 @@ The full format, and what the runner does for each policy, is in
 ## Azure Pipelines
 
 ```yaml
+pool:
+  vmImage: ubuntu-latest   # windows-latest works too; both have node and .NET 10
+
 steps:
-  - task: UseDotNet@2
-    displayName: .NET 10 runtime for the policy tests
-    inputs:
-      packageType: runtime
-      version: 10.x
-  - task: NodeTool@0
-    inputs:
-      versionSpec: 22.x
-  - script: npm install -g $(Pipeline.Workspace)/tools/apim-policy-cli.tgz
-    displayName: Install apim-policy
-  - script: apim-policy test --junit $(Agent.TempDirectory)/policy-tests.xml
+  - script: npx -y @charliethomson/apim-cli@0.1 test --junit $(Agent.TempDirectory)/policy-tests.xml
     displayName: Policy tests
   - task: PublishTestResults@2
     condition: succeededOrFailed()
@@ -99,6 +88,19 @@ steps:
       testRunTitle: APIM policy tests
 ```
 
-Under Azure Pipelines each failure also shows on the build summary at its file and line. Where
-the tarball comes from (`tools/apim-policy-cli.tgz` above) depends on how you get it there until
-it's published.
+Each failure also shows on the build summary at its file and line. On a self-hosted agent without
+.NET 10, add a `UseDotNet@2` step (`packageType: runtime`, `version: 10.x`) first; without node,
+a `NodeTool@0` step.
+
+## Building it from source
+
+```bash
+npm ci
+```
+
+```bash
+npm run package:cli
+```
+
+That packs `cli/charliethomson-apim-cli-<version>.tgz`, with the .NET runner inside, at the version
+derived from git; `npm install -g` it like any tarball.

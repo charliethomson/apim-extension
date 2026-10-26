@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
-import { type ApimInstance, ArmError, gatewayErrors, pushFormat, samePolicy } from '@apim-policy/azure';
+import { type ApimInstance, ArmError, gatewayErrors, pushFormat, samePolicy } from '@charliethomson/apim-azure';
 import { LANGUAGE_ID, type DocumentCache } from '../documents';
-import { fragmentIdsFor, type Scope, scopeFromInstancePath, scopeLabel } from '@apim-policy/core';
-import { parse } from '@apim-policy/document';
-import { summarize } from '@apim-policy/analysis';
+import { fragmentIdsFor, type Scope, scopeFromInstancePath, scopeLabel } from '@charliethomson/apim-core';
+import { parse } from '@charliethomson/apim-document';
+import { summarize } from '@charliethomson/apim-analysis';
 import type { InstanceConnection } from './connection';
 
 /** Read-only snapshots of what's live, for the left side of the review diff. */

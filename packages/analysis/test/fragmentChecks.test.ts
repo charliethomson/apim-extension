@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parse } from '@apim-policy/document';
+import { parse } from '@charliethomson/apim-document';
 import { fragmentDiagnostics, includeHints, type Includes } from '../src/fragmentChecks';
 import type { FragmentDoc } from '../src/fragmentDoc';
 import { summarize } from '../src/variables';

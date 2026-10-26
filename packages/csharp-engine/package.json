@@ -1,5 +1,5 @@
 {
-  "name": "@apim-policy/csharp-engine",
+  "name": "@charliethomson/apim-csharp-engine",
   "version": "0.0.0",
   "private": true,
   "description": "The built-in C# 7.3 engine: lexer, parser, type model, binder, JSON shapes, the APIM stubs and the allowlist lint.",
@@ -10,12 +10,12 @@
     "./assets/*": "./assets/*"
   },
   "dependencies": {
-    "@apim-policy/core": "*",
-    "@apim-policy/csharp-lexer": "*"
+    "@charliethomson/apim-core": "*",
+    "@charliethomson/apim-csharp-lexer": "*"
   },
   "devDependencies": {
-    "@apim-policy/document": "*",
-    "@apim-policy/fixtures": "*"
+    "@charliethomson/apim-document": "*",
+    "@charliethomson/apim-fixtures": "*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

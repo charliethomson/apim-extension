@@ -118,18 +118,12 @@ product, global), answers the backend itself, and checks the response, variables
 trace and errors. The C# in expressions compiles at C# 7.3 against the real .NET libraries, so it
 behaves as on the gateway, and nothing talks to Azure. It needs Node 20+ and the .NET 10 runtime.
 
-It isn't published to a registry yet; build the package and install the tarball:
+It's on npm as [`@charliethomson/apim-cli`](https://www.npmjs.com/package/@charliethomson/apim-cli),
+and Azure DevOps and GitHub hosted agents have node and .NET 10 already, so a pipeline step is
+one line:
 
 ```bash
-npm run package:cli
-```
-
-```bash
-npm install -g cli/apim-policy-cli-*.tgz
-```
-
-```bash
-apim-policy test --junit policy-tests.xml
+npx -y @charliethomson/apim-cli test --junit policy-tests.xml
 ```
 
 Exit codes are 0 (all passed), 1 (a test failed) and 2 (a test couldn't run, or none were
@@ -257,7 +251,7 @@ own; `extension/` wires them to the editor. Dependencies point one way, top to b
 | [`packages/fixtures`](packages/fixtures) | sample policies the suites share (test-only) | nothing |
 | [`extension/`](extension) | the `.vsix`: manifest, providers, grammars, snippets, the integration suite | everything |
 | [`packages/testing`](packages/testing) | policy tests: the test file format, building a run from an APIOps extract, the runner process client, the expectation checks, and text, JUnit and Azure DevOps reports ([reference](docs/testing.md)) | core, document, workspace |
-| [`cli/`](cli) | `apim-policy test`: the CLI over `@apim-policy/testing`, bundled with esbuild and packed with the runner beside it | testing (and the runner, at build time) |
+| [`cli/`](cli) | `apim-policy test`: the CLI over `@charliethomson/apim-testing`, bundled with esbuild and packed with the runner beside it | testing (and the runner, at build time) |
 | [`runner/`](runner) | the policy test runner (.NET, in progress): runs a request through a policy and its broader scopes, with the C# compiled by Roslyn at 7.3 and the outside world mocked ([plan](docs/policy-testing-plan.md), [what it models](docs/testing.md)) | the engine's `ApimContext.cs` |
 | [`bench/`](bench) | hot-path benchmarks | the packages it times |
 
@@ -301,7 +295,7 @@ npm run test:integration
 Each package's suite runs on its own too, from its directory or with `-w`:
 
 ```bash
-npm test -w @apim-policy/csharp-engine
+npm test -w @charliethomson/apim-csharp-engine
 ```
 
 CI also packages the `.vsix`. `engine.ci` runs when `packages/csharp-engine` changes: it builds
@@ -324,11 +318,11 @@ dotnet test runner/PolicyRunner.slnx
 ```
 
 ```bash
-npm test -w @apim-policy/testing
+npm test -w @charliethomson/apim-testing
 ```
 
 ```bash
-npm run build -w apim-policy-cli
+npm run build -w @charliethomson/apim-cli
 ```
 
 ```bash

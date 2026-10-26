@@ -23,9 +23,9 @@
  * that doesn't set an input the fragment requires.
  */
 
-import type { Comment, Document, Element, Node } from '@apim-policy/document';
-import { significantTokens, type Token } from '@apim-policy/csharp-lexer';
-import type { OffsetRange } from '@apim-policy/core';
+import type { Comment, Document, Element, Node } from '@charliethomson/apim-document';
+import { significantTokens, type Token } from '@charliethomson/apim-csharp-lexer';
+import type { OffsetRange } from '@charliethomson/apim-core';
 
 export interface FragmentVariable {
   /** For `@internal`, may be a pattern: `ru-int-*`, or `*` for everything undocumented. */

@@ -6,9 +6,9 @@
 
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, posix } from 'node:path';
-import { extractRootOf, type Scope, scopeFromPath, scopeLabel } from '@apim-policy/core';
-import { type Document, parse } from '@apim-policy/document';
-import { ExtractReader, type ScopeLink, scopeChains } from '@apim-policy/workspace';
+import { extractRootOf, type Scope, scopeFromPath, scopeLabel } from '@charliethomson/apim-core';
+import { type Document, parse } from '@charliethomson/apim-document';
+import { ExtractReader, type ScopeLink, scopeChains } from '@charliethomson/apim-workspace';
 import type { RunContext, RunInput, RunNode, ScopePolicy } from './protocol';
 import { type BodySpec, merge, type TestCase, TestFileError } from './testFile';
 import { toRunTree } from './tree';

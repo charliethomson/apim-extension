@@ -6,8 +6,8 @@
  * is usually incomplete, and the parse supplies the enclosing elements.
  */
 
-import type { Attribute, Document, Element, Node } from '@apim-policy/document';
-import type { OffsetRange } from '@apim-policy/core';
+import type { Attribute, Document, Element, Node } from '@charliethomson/apim-document';
+import type { OffsetRange } from '@charliethomson/apim-core';
 import { resolveDef, sectionOf } from './defs';
 import { SECTIONS, type AttributeDef, type Catalog, type ElementDef } from './schema';
 

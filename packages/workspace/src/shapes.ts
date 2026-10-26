@@ -1,13 +1,13 @@
-import { type CSharpEngine, declaredType, displayShaped, exampleCSharp, exampleJson, type JsonShape, type ShapeEnv, shapeOf } from '@apim-policy/csharp-engine';
-import type { Document, Expression } from '@apim-policy/document';
-import { documentShapes, type FragmentDoc, type GeneratedTypedefs, generateTypedefs, outputShapes, propertyDocs, setterTypes, setVariableTargets, summarize, typedefFor, wantedShapes } from '@apim-policy/analysis';
+import { type CSharpEngine, declaredType, displayShaped, exampleCSharp, exampleJson, type JsonShape, type ShapeEnv, shapeOf } from '@charliethomson/apim-csharp-engine';
+import type { Document, Expression } from '@charliethomson/apim-document';
+import { documentShapes, type FragmentDoc, type GeneratedTypedefs, generateTypedefs, outputShapes, propertyDocs, setterTypes, setVariableTargets, summarize, typedefFor, wantedShapes } from '@charliethomson/apim-analysis';
 import type { PolicyIndex } from './policyIndex';
 
 /** How deep includes are followed for shapes; fragments rarely nest more than once. */
 const MAX_DEPTH = 4;
 
 /**
- * The JSON shapes each document's variables have (shapes.ts in @apim-policy/analysis), including
+ * The JSON shapes each document's variables have (shapes.ts in @charliethomson/apim-analysis), including
  * what the fragments it includes set: their declared `@out` types, else what their code builds.
  * Computed once per document version, and again after any indexed file changes.
  */

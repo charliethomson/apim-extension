@@ -39,7 +39,7 @@ versioning and ignore the Rust-specific parts.
   defined, which swaps the stub's throw-null helper classes for its own working ones, so a
   change to the stubs' interfaces has to build there too.
 - **Layout:** an npm workspace shaped like a Rust product workspace. Libraries in `packages/*`
-  (`@apim-policy/<name>`, private, `0.0.0`, exporting `src/index.ts` with no build step) play the
+  (`@charliethomson/apim-<name>`, private, `0.0.0`, exporting `src/index.ts` with no build step) play the
   crates' part, and `extension/` is the one deliverable. Dependencies point one way (README's
   Layout table), only `extension/` imports `vscode`, and `npm run lint` enforces both plus
   declared-only, exports-only imports between packages. A new package declares its workspace
@@ -48,11 +48,18 @@ versioning and ignore the Rust-specific parts.
   binary. `extension/package.json` `version` stays a placeholder (`0.0.1`). `npm run package` derives
   `MAJOR.MINOR.<count>` with `scripts/ci/version.sh` and passes it to vsce, so the installed
   extension reports the real version.
-- **Second artifact:** `cli/` (`apim-policy-cli`, command `apim-policy`, id
+- **Package names:** every workspace package is `@charliethomson/apim-<name>` (`apim-core`,
+  `apim-testing`, `apim-cli`, `apim-bench`). The extension alone stays `apim-policy`, since vsce
+  makes the Marketplace id from it.
+- **Second artifact:** `cli/` (`@charliethomson/apim-cli`, command `apim-policy`, id
   `dev.thmsn.apim-policy.cli`) packs an npm tarball with `npm run package:cli`: the esbuild bundle
   plus a portable Release publish of `runner/`, at the derived version (`cli/pack.mjs`;
-  `cli/package.json` keeps `0.0.1`). It isn't published anywhere yet: the cli-tool archetype says
-  the registry, but its users are Azure DevOps hosted agents, and how they get it is undecided.
+  `cli/package.json` keeps `0.0.1`).
+- **Publishing the CLI:** to public npm, not the registry the cli-tool archetype names. Its users
+  run it on Azure DevOps hosted agents, which have node and .NET 10, so `npx` needs no install
+  step and no reach into the homelab. `cli.prerelease` publishes each push to `main` that touches
+  it under the `next` dist-tag; `cli.release` publishes `v*` tags (or moves `latest` to a version
+  `next` already has).
 - **Identifier:** the VS Code extension id is `thmsn-dev.apim-policy` (marketplace form
   `publisher.name`). `dev.thmsn.apim-policy` is used anywhere a reverse-domain id fits.
 - **Testing:** unit tests run on vitest, per package. Every package under `packages/` has the 80%
@@ -71,21 +78,25 @@ versioning and ignore the Rust-specific parts.
     integration suite in one job. `engine.ci`: on `packages/csharp-engine` changes, the stubs
     build and the generated-assets drift check (.NET SDK 10.0.103, cached). `policy-tests.ci`: on
     `runner/`, `cli/`, `packages/testing`, the fixtures or `ApimContext.cs` changes, the runner's
-    build and xunit tests on the same SDK, `@apim-policy/testing`'s suite against that runner (its
+    build and xunit tests on the same SDK, `@charliethomson/apim-testing`'s suite against that runner (its
     end-to-end tests skip wherever no runner is built), the CLI's typecheck, lint and tests, and
     the packed CLI over the fixtures. `extension.ci` doesn't watch `cli/`, so a CLI-only change
     doesn't publish an extension pre-release. `audit.ci`: libci's `AuditGate` over `npm audit`, with `audit-exceptions.json`.
     `repo.checks`: `.woodpecker/` and the lockfile match a fresh emit, and `.kiln/` passes
     `cargo fmt --check` and clippy pedantic (`[lints]` in `.kiln/Cargo.toml`) with `-D warnings`.
     `extension.release`: publishes to the Visual Studio Marketplace on `v*` tags or by hand.
+    `cli.prerelease` and `cli.release`: the CLI to npm under `next` and `latest`, packed and run
+    over the fixtures first.
     `extension.prerelease`: publishes each push to `main` that touches the extension as a
     Marketplace pre-release, skipping a commit that carries a `v*` tag.
   - **Push-only.** `.kiln/` depends on the private kiln and libci, so jobs fetch them with the
     `ssh_key` checkout key, and kiln refuses pull-request triggers on such a repo. Changes are
     gated when they land on `main`.
   - **Woodpecker setup, by hand:** the `ssh_key` secret (a read-only deploy key for kiln and
-    libci) and `vsce_pat` (an Azure DevOps token with Marketplace (Manage) scope for the
-    `thmsn-dev` publisher); the repo's **trusted** (volumes) flag, without which Woodpecker
+    libci), `vsce_pat` (an Azure DevOps token with Marketplace (Manage) scope for the
+    `thmsn-dev` publisher) and `npm_token` (an npm granular access token with read and write on
+    `@charliethomson/apim-cli`; the first publish needs one scoped to all of `@charliethomson`,
+    since the package doesn't exist yet); the repo's **trusted** (volumes) flag, without which Woodpecker
     refuses every generated workflow (they mount the npm and .NET caches); a cron named
     `audit.ci` for the weekly audit; and "cancel previous pipelines" on for push only, so a
     manual or tag release is never cancelled. Jobs download node, VS Code and NuGet packages,

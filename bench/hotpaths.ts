@@ -8,10 +8,10 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Allowlist, type AllowlistData, type BclIndex, CSharpEngine, lintAllowedTypes, lintReferences, type RawModel, readStubs, TypeModel } from '@apim-policy/csharp-engine';
-import { parse } from '@apim-policy/document';
-import { catalog, validate } from '@apim-policy/catalog';
-import { resultTypes, summarize } from '@apim-policy/analysis';
+import { Allowlist, type AllowlistData, type BclIndex, CSharpEngine, lintAllowedTypes, lintReferences, type RawModel, readStubs, TypeModel } from '@charliethomson/apim-csharp-engine';
+import { parse } from '@charliethomson/apim-document';
+import { catalog, validate } from '@charliethomson/apim-catalog';
+import { resultTypes, summarize } from '@charliethomson/apim-analysis';
 
 // ---- harness ----------------------------------------------------------------------------------
 

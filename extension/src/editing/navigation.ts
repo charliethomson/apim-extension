@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
-import { nodeAt } from '@apim-policy/document';
-import type { PolicyIndex } from '@apim-policy/workspace';
+import { nodeAt } from '@charliethomson/apim-document';
+import type { PolicyIndex } from '@charliethomson/apim-workspace';
 
 /** Go-to-definition and links from include-fragment's fragment-id to the fragment file. */
 export function registerFragmentNavigation(cache: DocumentCache, index: PolicyIndex<vscode.Uri>): vscode.Disposable {

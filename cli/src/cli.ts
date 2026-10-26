@@ -15,7 +15,7 @@ import {
   runTests,
   summary,
   type TestResult,
-} from '@apim-policy/testing';
+} from '@charliethomson/apim-testing';
 import { type Args, parseArgs, type TestArgs, USAGE, UsageError } from './args';
 
 /** What the command works with, so tests can give their own. */

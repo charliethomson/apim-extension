@@ -38,7 +38,7 @@ const boundaries = {
             if (!target.startsWith(own.dir + sep)) report(`'${spec}' reaches outside ${own.name}; import the package that owns it by name.`);
           } else if (spec === 'vscode') {
             if (own.name !== 'apim-policy') report(`Only the extension imports 'vscode'; ${own.name} must work without VS Code.`);
-          } else if (spec.startsWith('@apim-policy/')) {
+          } else if (spec.startsWith('@charliethomson/')) {
             const name = spec.split('/').slice(0, 2).join('/');
             if (!own.declared.has(name)) report(`${own.name} doesn't declare ${name} in its package.json.`);
             else if (/\/src(\/|$)/.test(spec.slice(name.length))) report(`'${spec}' imports ${name}'s internals; use its exports.`);

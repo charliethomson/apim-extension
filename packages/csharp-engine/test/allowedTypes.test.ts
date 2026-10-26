@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { fixture } from '@apim-policy/fixtures';
-import { parse } from '@apim-policy/document';
+import { fixture } from '@charliethomson/apim-fixtures';
+import { parse } from '@charliethomson/apim-document';
 import { lintAllowedTypes, lintReferences } from '../src/allowedTypes';
 import { loadAllowlist, loadEngine } from '../src/testing';
 

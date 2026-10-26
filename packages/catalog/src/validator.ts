@@ -2,8 +2,8 @@
  * Structural validation of a parsed policy document against the policy catalog.
  */
 
-import type { Attribute, Document, Element, Node } from '@apim-policy/document';
-import type { OffsetRange } from '@apim-policy/core';
+import type { Attribute, Document, Element, Node } from '@charliethomson/apim-document';
+import type { OffsetRange } from '@charliethomson/apim-core';
 import { SECTIONS, type Catalog, type ChildDef, type Content, type ElementDef, type Section } from './schema';
 
 export type Severity = 'error' | 'warning' | 'info';

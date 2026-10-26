@@ -5,9 +5,9 @@
  * a variable may hold (`variable`).
  */
 
-import type { Attribute, Document, Element, Expression, Node } from '@apim-policy/document';
-import type { ResultType } from '@apim-policy/csharp-engine';
-import type { Catalog, ChildDef, ElementDef } from '@apim-policy/catalog';
+import type { Attribute, Document, Element, Expression, Node } from '@charliethomson/apim-document';
+import type { ResultType } from '@charliethomson/apim-csharp-engine';
+import type { Catalog, ChildDef, ElementDef } from '@charliethomson/apim-catalog';
 
 /** Result types for attribute expressions whose attribute has a declared type. */
 export function resultTypes(doc: Document, catalog: Catalog): Map<Expression, ResultType> {

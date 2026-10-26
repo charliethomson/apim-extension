@@ -4,9 +4,9 @@
  * `context.Variables["…"]` and friends, and header names in `Headers["…"]`.
  */
 
-import type { Document, Element, Node } from '@apim-policy/document';
-import { lex, type Token } from '@apim-policy/csharp-lexer';
-import type { OffsetRange } from '@apim-policy/core';
+import type { Document, Element, Node } from '@charliethomson/apim-document';
+import { lex, type Token } from '@charliethomson/apim-csharp-lexer';
+import type { OffsetRange } from '@charliethomson/apim-core';
 import { fragmentDoc, variableReads, type FragmentDoc, type FragmentVariable, type IncludeSite, type VariableRead } from './fragmentDoc';
 
 export interface VariableDef {

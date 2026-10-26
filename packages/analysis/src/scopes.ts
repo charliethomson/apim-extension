@@ -12,8 +12,8 @@
  * set only when every chain sets it.
  */
 
-import type { Document, Element, Node } from '@apim-policy/document';
-import type { Scope } from '@apim-policy/core';
+import type { Document, Element, Node } from '@charliethomson/apim-document';
+import type { Scope } from '@charliethomson/apim-core';
 
 /**
  * The broader scopes around `scope`, innermost first, one chain per product the API belongs to

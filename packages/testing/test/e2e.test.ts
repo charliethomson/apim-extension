@@ -9,7 +9,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { findTestFiles, runTests } from '../src/run';
 import { ProcessRunner, runnerCommand } from '../src/runner';
 import { textReport } from '../src/report';
-import { fixturesDir } from '@apim-policy/fixtures';
+import { fixturesDir } from '@charliethomson/apim-fixtures';
 
 const built = join(__dirname, '..', '..', '..', 'runner', 'PolicyRunner', 'bin', 'Debug', 'net10.0', 'apim-policy-runner.dll');
 const runnerPath = process.env.APIM_POLICY_RUNNER ?? (existsSync(built) ? built : undefined);

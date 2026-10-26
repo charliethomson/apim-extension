@@ -1,4 +1,4 @@
-import type { OffsetRange, SourceMap } from '@apim-policy/core';
+import type { OffsetRange, SourceMap } from '@charliethomson/apim-core';
 
 /** All ranges are document offsets, end-exclusive. */
 

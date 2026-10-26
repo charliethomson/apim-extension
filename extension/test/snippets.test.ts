@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parse } from '@apim-policy/document';
-import { catalog, validate } from '@apim-policy/catalog';
+import { parse } from '@charliethomson/apim-document';
+import { catalog, validate } from '@charliethomson/apim-catalog';
 
 const snippets = JSON.parse(readFileSync(join(__dirname, '..', 'snippets', 'apim-policy.code-snippets'), 'utf8')) as Record<
   string,

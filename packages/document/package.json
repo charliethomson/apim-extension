@@ -1,5 +1,5 @@
 {
-  "name": "@apim-policy/document",
+  "name": "@charliethomson/apim-document",
   "version": "0.0.0",
   "private": true,
   "description": "The tolerant policy document parser: XML scanner, AST, entities, queries and format detection.",
@@ -8,11 +8,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@apim-policy/core": "*",
-    "@apim-policy/csharp-lexer": "*"
+    "@charliethomson/apim-core": "*",
+    "@charliethomson/apim-csharp-lexer": "*"
   },
   "devDependencies": {
-    "@apim-policy/fixtures": "*"
+    "@charliethomson/apim-fixtures": "*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

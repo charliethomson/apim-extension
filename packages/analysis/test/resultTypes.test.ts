@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parse } from '@apim-policy/document';
+import { parse } from '@charliethomson/apim-document';
 import { resultTypes } from '../src/resultTypes';
-import { Catalog } from '@apim-policy/catalog';
+import { Catalog } from '@charliethomson/apim-catalog';
 
 const catalog = new Catalog({
   policies: [

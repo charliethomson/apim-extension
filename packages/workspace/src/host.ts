@@ -3,10 +3,10 @@
  * editor's URI type: the index hands back the URIs the host gave it.
  */
 
-import type { Backend, NamedValue } from '@apim-policy/azure';
-import type { Scope } from '@apim-policy/core';
-import type { Document } from '@apim-policy/document';
-import type { IncludeSets, OuterSet, PolicySummary } from '@apim-policy/analysis';
+import type { Backend, NamedValue } from '@charliethomson/apim-azure';
+import type { Scope } from '@charliethomson/apim-core';
+import type { Document } from '@charliethomson/apim-document';
+import type { IncludeSets, OuterSet, PolicySummary } from '@charliethomson/apim-analysis';
 import type { ScopeReads } from './extract';
 
 /** Editable copies of instance documents; an open one stands in for the instance's version. */

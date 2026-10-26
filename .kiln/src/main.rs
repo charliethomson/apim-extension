@@ -19,9 +19,11 @@ mod pipelines;
 use libci::secrets::{SshDeployKey, git};
 
 // `vsce_pat`: an Azure DevOps token with Marketplace (Manage) scope for the `thmsn-dev`
-// publisher, provisioned by hand in Woodpecker.
+// publisher. `npm_token`: an npm granular access token that can publish
+// `@charliethomson/apim-cli`. Both provisioned by hand in Woodpecker.
 kiln::secrets! {
     VscePat = "vsce_pat",
+    NpmToken = "npm_token",
 }
 
 fn main() -> kiln::Result<()> {
@@ -39,5 +41,7 @@ fn main() -> kiln::Result<()> {
         // ── Delivery ───────────────────────────────────────────────────────────
         .pipeline(pipelines::extension::prerelease())
         .pipeline(pipelines::extension::release())
+        .pipeline(pipelines::cli::prerelease())
+        .pipeline(pipelines::cli::release())
         .main()
 }

@@ -9,8 +9,8 @@
  * written in the code (`DateTime.FromBinary`); the semantic pass covers the rest.
  */
 
-import { KEYWORDS, significantTokens, type Token } from '@apim-policy/csharp-lexer';
-import type { OffsetRange } from '@apim-policy/core';
+import { KEYWORDS, significantTokens, type Token } from '@charliethomson/apim-csharp-lexer';
+import type { OffsetRange } from '@charliethomson/apim-core';
 import type { Reference } from './binder';
 
 export interface AllowlistData {

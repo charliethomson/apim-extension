@@ -19,8 +19,8 @@
  * errors isn't formatted: where its elements end is a guess.
  */
 
-import type { Document, Element, Expression, Node } from '@apim-policy/document';
-import { lex, type Token } from '@apim-policy/csharp-lexer';
+import type { Document, Element, Expression, Node } from '@charliethomson/apim-document';
+import { lex, type Token } from '@charliethomson/apim-csharp-lexer';
 import { fragmentDoc } from './fragmentDoc';
 import { readHeaderComment, renderHeader } from './headerShape';
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parse } from '@apim-policy/document';
+import { parse } from '@charliethomson/apim-document';
 import { PolicyIndex, within } from '../src/policyIndex';
 import { fragmentXml, MemoryHost, MemoryInstance, policyXml } from './memory';
 

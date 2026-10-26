@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CSharpEngine } from '@apim-policy/csharp-engine';
-import { loadEngine } from '@apim-policy/csharp-engine/testing';
-import { type Document, parse } from '@apim-policy/document';
-import { summarize } from '@apim-policy/analysis';
+import type { CSharpEngine } from '@charliethomson/apim-csharp-engine';
+import { loadEngine } from '@charliethomson/apim-csharp-engine/testing';
+import { type Document, parse } from '@charliethomson/apim-document';
+import { summarize } from '@charliethomson/apim-analysis';
 import { PolicyIndex } from '../src/policyIndex';
 import { ShapeService } from '../src/shapes';
 import { MemoryHost, MemoryInstance, policyXml, type Uri } from './memory';

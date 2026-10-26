@@ -1,9 +1,26 @@
 {
-  "name": "apim-policy-cli",
+  "name": "@charliethomson/apim-cli",
   "version": "0.0.1",
   "private": true,
   "description": "Unit tests for Azure API Management policies, run offline: apim-policy test.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/charliethomson/apim-extension.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/charliethomson/apim-extension/tree/main/cli#readme",
+  "bugs": "https://github.com/charliethomson/apim-extension/issues",
+  "keywords": [
+    "azure",
+    "api-management",
+    "apim",
+    "apim-policy",
+    "policy",
+    "testing",
+    "apiops",
+    "azure-devops"
+  ],
   "bin": {
     "apim-policy": "dist/apim-policy.js"
   },
@@ -17,7 +34,7 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@apim-policy/testing": "*"
+    "@charliethomson/apim-testing": "*"
   },
   "scripts": {
     "build": "node esbuild.mjs && npm run build:runner",
@@ -26,5 +43,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "package": "eval \"$(../scripts/ci/version.sh)\" && export RELEASE_VERSION COMMIT DIRTY && node esbuild.mjs && npm run build:runner && node pack.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

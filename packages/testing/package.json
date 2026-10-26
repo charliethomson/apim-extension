@@ -1,5 +1,5 @@
 {
-  "name": "@apim-policy/testing",
+  "name": "@charliethomson/apim-testing",
   "version": "0.0.0",
   "private": true,
   "description": "Policy tests: the test file format, building a run from an APIOps extract, the runner process client, the expectation checks and the reports.",
@@ -8,13 +8,13 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@apim-policy/core": "*",
-    "@apim-policy/document": "*",
-    "@apim-policy/workspace": "*",
+    "@charliethomson/apim-core": "*",
+    "@charliethomson/apim-document": "*",
+    "@charliethomson/apim-workspace": "*",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@apim-policy/fixtures": "*"
+    "@charliethomson/apim-fixtures": "*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

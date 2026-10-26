@@ -19,7 +19,7 @@
     "test:integration": "npm run test:integration -w extension",
     "package": "npm run package -w extension",
     "bench": "npm run bench -w bench",
-    "package:cli": "npm run package -w apim-policy-cli"
+    "package:cli": "npm run package -w @charliethomson/apim-cli"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

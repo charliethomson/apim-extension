@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
-import { nodeAt } from '@apim-policy/document';
-import { type Catalog, resolveDef } from '@apim-policy/catalog';
-import type { PolicyIndex } from '@apim-policy/workspace';
+import { nodeAt } from '@charliethomson/apim-document';
+import { type Catalog, resolveDef } from '@charliethomson/apim-catalog';
+import type { PolicyIndex } from '@charliethomson/apim-workspace';
 
 /** Hover for policy element and attribute names (from the catalog) and named values. */
 export function registerPolicyHover(cache: DocumentCache, catalog: Catalog, index: PolicyIndex<vscode.Uri>): vscode.Disposable {

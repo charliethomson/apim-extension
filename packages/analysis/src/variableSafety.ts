@@ -19,10 +19,10 @@
  * Each report carries a rewrite to `GetValueOrDefault<T>("x")`, keeping a cast's type.
  */
 
-import type { Document, Element, Expression, Node } from '@apim-policy/document';
-import type { OffsetRange } from '@apim-policy/core';
+import type { Document, Element, Expression, Node } from '@charliethomson/apim-document';
+import type { OffsetRange } from '@charliethomson/apim-core';
 import { readsIn, type FragmentDoc } from './fragmentDoc';
-import { namesVariable } from '@apim-policy/catalog';
+import { namesVariable } from '@charliethomson/apim-catalog';
 import type { IncludeSets } from './scopes';
 
 export interface UnguardedRead {

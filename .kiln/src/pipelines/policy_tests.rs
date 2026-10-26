@@ -49,7 +49,7 @@ pub fn ci() -> Pipeline {
                 let sdk = dotnet.trim_end_matches("/dotnet").to_string();
                 let path = format!("{sdk}:{}", std::env::var("PATH").unwrap_or_default());
                 ctx.step("test package against the runner", |ctx| {
-                    ctx.run("npm", ["test", "-w", "@apim-policy/testing"])
+                    ctx.run("npm", ["test", "-w", "@charliethomson/apim-testing"])
                         .env("APIM_POLICY_RUNNER", built.as_str())
                         .env("DOTNET_ROOT", sdk.as_str())
                         .env("PATH", path.as_str())
@@ -59,15 +59,15 @@ pub fn ci() -> Pipeline {
                 // The CLI's own checks: extension.ci doesn't watch cli/, so a CLI-only change
                 // doesn't publish an extension pre-release.
                 ctx.step("CLI checks", |ctx| {
-                    ctx.run("npm", ["run", "typecheck", "-w", "apim-policy-cli"]).call()?;
+                    ctx.run("npm", ["run", "typecheck", "-w", "@charliethomson/apim-cli"]).call()?;
                     ctx.run("npx", ["eslint", "--max-warnings", "0", "cli"]).call()?;
-                    ctx.run("npm", ["run", "test:coverage", "-w", "apim-policy-cli"]).call().map(drop)
+                    ctx.run("npm", ["run", "test:coverage", "-w", "@charliethomson/apim-cli"]).call().map(drop)
                 })?;
                 // What a user installs: the bundle and a Release publish of the runner, packed at
                 // the derived version, then run over every fixture test.
                 let version = Version::derive(ctx)?.release_version();
                 ctx.step("pack the CLI", |ctx| {
-                    ctx.run("npm", ["run", "package", "-w", "apim-policy-cli"])
+                    ctx.run("npm", ["run", "package", "-w", "@charliethomson/apim-cli"])
                         .env("RELEASE_VERSION", version.as_str())
                         .env("DOTNET_ROOT", sdk.as_str())
                         .env("PATH", path.as_str())

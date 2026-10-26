@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
-import { formatPolicy } from '@apim-policy/analysis';
+import { formatPolicy } from '@charliethomson/apim-analysis';
 
 /**
  * Format Document and Format Selection for policies: indentation and line breaks only (see
- * `formatPolicy` in @apim-policy/analysis). A selection (or format-on-save's modified lines) gets every edit of each
+ * `formatPolicy` in @charliethomson/apim-analysis). A selection (or format-on-save's modified lines) gets every edit of each
  * element that starts inside it, and none of the others: applying half of an element's edits
  * would move its content without moving the element.
  */

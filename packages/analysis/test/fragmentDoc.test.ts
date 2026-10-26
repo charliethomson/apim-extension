@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { fixture } from '@apim-policy/fixtures';
-import { parse } from '@apim-policy/document';
+import { fixture } from '@charliethomson/apim-fixtures';
+import { parse } from '@charliethomson/apim-document';
 import { checkFragmentHeader, checkIncludes, checkInternalUse, declarationOf, fragmentDoc, inputUse, matchesPattern, propertiesOfTypeText, variableNameSuggestions, type FragmentDoc } from '../src/fragmentDoc';
 import { knownVariables, summarize } from '../src/variables';
 

@@ -1,6 +1,6 @@
 /**
  * The full C# 7.3 lexer for the built-in engine. It builds on the structural lexer in
- * @apim-policy/csharp-lexer (which owns strings, chars, comments, numbers and identifiers) and adds
+ * @charliethomson/apim-csharp-lexer (which owns strings, chars, comments, numbers and identifiers) and adds
  * what parsing needs: multi-character operators, contextual keywords, literal kinds, the code
  * inside interpolation holes, and `{{named values}}`.
  *
@@ -8,7 +8,7 @@
  * closes two type argument lists.
  */
 
-import { KEYWORDS as STRUCTURAL_KEYWORDS, lexOne } from '@apim-policy/csharp-lexer';
+import { KEYWORDS as STRUCTURAL_KEYWORDS, lexOne } from '@charliethomson/apim-csharp-lexer';
 
 export type TokenKind = 'ident' | 'keyword' | 'number' | 'string' | 'char' | 'interp' | 'punct' | 'namedValue' | 'eof';
 

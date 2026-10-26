@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Document, parse } from '@apim-policy/document';
+import { type Document, parse } from '@charliethomson/apim-document';
 import { ExtractReader, type ExtractFiles, productApis, scopeChains } from '../src/extract';
 import { policyXml } from './memory';
 

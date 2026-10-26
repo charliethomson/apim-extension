@@ -10,7 +10,7 @@
  * The parser never throws. Problems become diagnostics and it recovers as locally as it can.
  */
 
-import { SourceMap, SourceMapBuilder, type OffsetRange } from '@apim-policy/core';
+import { SourceMap, SourceMapBuilder, type OffsetRange } from '@charliethomson/apim-core';
 import type {
   Attribute,
   CData,
@@ -23,7 +23,7 @@ import type {
   ParseErrorCode,
   Text,
 } from './ast';
-import { scanBalanced } from '@apim-policy/csharp-lexer';
+import { scanBalanced } from '@charliethomson/apim-csharp-lexer';
 import { decodeEntities, type Decoded } from './entities';
 
 const NAME = /[A-Za-z_:][-A-Za-z0-9_:.]*/y;

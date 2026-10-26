@@ -4,7 +4,7 @@
  * the links (who includes it, where included fragments' docs are) and the inferred JSON shapes.
  */
 
-import type { Document, Element, Node } from '@apim-policy/document';
+import type { Document, Element, Node } from '@charliethomson/apim-document';
 import { matchesPattern, type FragmentVariable } from './fragmentDoc';
 import { summarize } from './variables';
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Fragment, NamedValue } from '@apim-policy/azure';
-import { instancePath, type Scope } from '@apim-policy/core';
-import { parse } from '@apim-policy/document';
+import type { Fragment, NamedValue } from '@charliethomson/apim-azure';
+import { instancePath, type Scope } from '@charliethomson/apim-core';
+import { parse } from '@charliethomson/apim-document';
 import { documentScope, type Guard, InstanceReader, type InstanceReads, unknownNamedValues } from '../src/instance';
 import { fragmentXml, policyXml } from './memory';
 

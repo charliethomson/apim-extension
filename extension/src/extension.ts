@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Allowlist, type AllowlistData, CSharpEngine, type RawModel, readStubs, TypeModel, type UsageFilter } from '@apim-policy/csharp-engine';
+import { Allowlist, type AllowlistData, CSharpEngine, type RawModel, readStubs, TypeModel, type UsageFilter } from '@charliethomson/apim-csharp-engine';
 import { DocumentCache, LANGUAGE_ID } from './documents';
 import { registerAllowlistLint } from './diagnostics/allowlist';
 import { registerCompatibility } from './diagnostics/compatibility';
@@ -16,12 +16,12 @@ import { registerInstanceFileSystem } from './instance/files';
 import { pushCommand, PushSupport } from './instance/push';
 import { registerIntellisense } from './editing/intellisense';
 import { registerLanguageDetection } from './editing/languageDetection';
-import { ShapeService } from '@apim-policy/workspace';
+import { ShapeService } from '@charliethomson/apim-workspace';
 import { workspaceIndex } from './workspace/host';
 import { log } from './log';
-import { catalog } from '@apim-policy/catalog';
-import allowedTypes from '@apim-policy/csharp-engine/assets/allowed-types.json';
-import bclTypes from '@apim-policy/csharp-engine/assets/bcl-types.json';
+import { catalog } from '@charliethomson/apim-catalog';
+import allowedTypes from '@charliethomson/apim-csharp-engine/assets/allowed-types.json';
+import bclTypes from '@charliethomson/apim-csharp-engine/assets/bcl-types.json';
 
 /**
  * The extension activates for every XML file (`onLanguage:xml`), so that language detection can

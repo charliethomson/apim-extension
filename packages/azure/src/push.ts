@@ -3,7 +3,7 @@
  * differs from what's live, and where the gateway's validation errors point.
  */
 
-import { type Document, isEscapedFormat } from '@apim-policy/document';
+import { type Document, isEscapedFormat } from '@charliethomson/apim-document';
 
 /**
  * `xml` for a policy written with `&quot;` in its expressions (the portal's escaped form),

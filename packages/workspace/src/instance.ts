@@ -4,14 +4,14 @@
  * editor owns the connection itself (sign-in, settings, status); this owns what's read through it.
  */
 
-import type { Backend, Fragment, NamedValue, Product } from '@apim-policy/azure';
-import { scopeFromInstancePath, scopeFromPath, type OffsetRange, type Scope } from '@apim-policy/core';
-import { type Document, type Node, parse } from '@apim-policy/document';
-import { type IncludeSets, type OuterSet, outerVariables, summarize } from '@apim-policy/analysis';
+import type { Backend, Fragment, NamedValue, Product } from '@charliethomson/apim-azure';
+import { scopeFromInstancePath, scopeFromPath, type OffsetRange, type Scope } from '@charliethomson/apim-core';
+import { type Document, type Node, parse } from '@charliethomson/apim-document';
+import { type IncludeSets, type OuterSet, outerVariables, summarize } from '@charliethomson/apim-analysis';
 import { scopeChains, type ScopeReads } from './extract';
 import { EDIT_SCHEME, INSTANCE_SCHEME, type RemoteFragment } from './host';
 
-/** The reads an instance answers (`ApimInstance` in @apim-policy/azure). */
+/** The reads an instance answers (`ApimInstance` in @charliethomson/apim-azure). */
 export interface InstanceReads {
   fragments(): Promise<Fragment[]>;
   namedValues(): Promise<NamedValue[]>;
@@ -64,7 +64,7 @@ export class InstanceReader<U> {
 
   /**
    * What the broader scopes set before each point of `doc`, the policy `key` names at `scope` (see
-   * scopes.ts in @apim-policy/analysis). Worked out once per parse and scope.
+   * scopes.ts in @charliethomson/apim-analysis). Worked out once per parse and scope.
    */
   outerVariables(key: string, scope: Scope, doc: Document, includeSets: IncludeSets): Promise<OuterSet[]> {
     const hit = this.outerCache.get(key);

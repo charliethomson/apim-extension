@@ -1,4 +1,4 @@
-import type { Element } from '@apim-policy/document';
+import type { Element } from '@charliethomson/apim-document';
 import { SECTIONS, type Catalog, type ElementDef, type Section } from './schema';
 
 /**

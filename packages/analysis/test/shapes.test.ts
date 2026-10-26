@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { declaredType, displayShape, NO_SHAPES, shapeOf } from '@apim-policy/csharp-engine';
-import { loadEngine } from '@apim-policy/csharp-engine/testing';
-import { parse } from '@apim-policy/document';
+import { declaredType, displayShape, NO_SHAPES, shapeOf } from '@charliethomson/apim-csharp-engine';
+import { loadEngine } from '@charliethomson/apim-csharp-engine/testing';
+import { parse } from '@charliethomson/apim-document';
 import { documentShapes, envOf, generateTypedefs, outputShapes, setterTypes, setVariableTargets, typedefFor, wantedShapes } from '../src/shapes';
 import { propertyDocs } from '../src/fragmentDoc';
 import { draftModel, renderHeader } from '../src/headerShape';

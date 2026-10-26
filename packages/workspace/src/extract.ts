@@ -4,9 +4,9 @@
  * a scope's policy), and `scopeChains` builds the chains from them.
  */
 
-import { extractPolicyPath, type Scope } from '@apim-policy/core';
-import type { Document } from '@apim-policy/document';
-import { chainsFor } from '@apim-policy/analysis';
+import { extractPolicyPath, type Scope } from '@charliethomson/apim-core';
+import type { Document } from '@charliethomson/apim-document';
+import { chainsFor } from '@charliethomson/apim-analysis';
 
 /** One broader scope and its parsed policy; undefined when it has none (APIM treats that as `<base />`). */
 export interface ScopeLink {
@@ -24,7 +24,7 @@ export interface ScopeReads {
 
 /**
  * The broader scopes around `scope` with their policies, innermost first, one chain per product its
- * API is in (`chainsFor` in @apim-policy/analysis).
+ * API is in (`chainsFor` in @charliethomson/apim-analysis).
  */
 export async function scopeChains(scope: Scope, reads: ScopeReads): Promise<ScopeLink[][]> {
   const products = scope.kind === 'api' || scope.kind === 'operation' ? await reads.productsOf(scope.api) : [];

@@ -1,13 +1,13 @@
 import { posix } from 'node:path';
 import * as vscode from 'vscode';
 import { LANGUAGE_ID, type DocumentCache } from '../documents';
-import { fragmentIdsFor, scopeFromInstancePath, scopeLabel } from '@apim-policy/core';
-import { type DocContext, fragmentMarkdown, GENERATED_MARKER, policyMarkdown, summarize } from '@apim-policy/analysis';
-import type { PolicyIndex, ShapeService } from '@apim-policy/workspace';
+import { fragmentIdsFor, scopeFromInstancePath, scopeLabel } from '@charliethomson/apim-core';
+import { type DocContext, fragmentMarkdown, GENERATED_MARKER, policyMarkdown, summarize } from '@charliethomson/apim-analysis';
+import type { PolicyIndex, ShapeService } from '@charliethomson/apim-workspace';
 import type { InstanceConnection } from '../instance/connection';
 
 /**
- * Markdown docs for policies and fragments (`fragmentMarkdown` and `policyMarkdown` in @apim-policy/analysis):
+ * Markdown docs for policies and fragments (`fragmentMarkdown` and `policyMarkdown` in @charliethomson/apim-analysis):
  *
  * - **APIM: Generate Docs** previews the doc for the open policy or fragment, writing nothing;
  * - **APIM: Write Fragment Docs** writes one beside each fragment in the workspace (`README.md` in

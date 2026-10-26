@@ -1,6 +1,6 @@
 /**
  * What each context variable's JSON value looks like in one document: the shapes C# completion
- * and hover use for `context.Variables["x"]` (see json.ts in @apim-policy/csharp-engine).
+ * and hover use for `context.Variables["x"]` (see json.ts in @charliethomson/apim-csharp-engine).
  *
  * In order of precedence: types written in a fragment header (the document's own `@in`s and
  * `@out`s, and the `@out`s of the fragments it includes), then what the document's own
@@ -8,8 +8,8 @@
  * another's. A declared shape keeps its keys; an inferred one adds any it lacks.
  */
 
-import type { Document, Expression, Node } from '@apim-policy/document';
-import { type CodeKind, declaredType, displayShape, displayShaped, type JsonShape, mergeShapes, type ShapeEnv, shapeFits, shapeOf, type TypeModel } from '@apim-policy/csharp-engine';
+import type { Document, Expression, Node } from '@charliethomson/apim-document';
+import { type CodeKind, declaredType, displayShape, displayShaped, type JsonShape, mergeShapes, type ShapeEnv, shapeFits, shapeOf, type TypeModel } from '@charliethomson/apim-csharp-engine';
 import type { HeaderEntry } from './headerShape';
 import { propertyDocs, type FragmentDoc } from './fragmentDoc';
 import { summarize } from './variables';

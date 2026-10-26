@@ -3,8 +3,8 @@
  * comments dropped, every element, text and expression placed by line and column in its file.
  */
 
-import { Lines } from '@apim-policy/core';
-import { decodeEntities, type Document, type Expression, type Node } from '@apim-policy/document';
+import { Lines } from '@charliethomson/apim-core';
+import { decodeEntities, type Document, type Expression, type Node } from '@charliethomson/apim-document';
 import type { RunExpr, RunNode } from './protocol';
 
 /** The document's root element as a run tree, or undefined when it has none. */

@@ -5,8 +5,8 @@
  * and hints.
  */
 
-import type { OffsetRange } from '@apim-policy/core';
-import type { Document } from '@apim-policy/document';
+import type { OffsetRange } from '@charliethomson/apim-core';
+import type { Document } from '@charliethomson/apim-document';
 import { checkFragmentHeader, checkIncludes, checkInternalUse, type FragmentDoc, type FragmentProblem, type FragmentVariable, type IncludedFragment } from './fragmentDoc';
 import type { OuterSet } from './scopes';
 import { outputsNotAlwaysSet, unguardedReads } from './variableSafety';

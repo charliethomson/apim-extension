@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
-import { type Catalog, type Severity, validate } from '@apim-policy/catalog';
+import { type Catalog, type Severity, validate } from '@charliethomson/apim-catalog';
 
 const SEVERITY: Record<Severity, vscode.DiagnosticSeverity> = {
   error: vscode.DiagnosticSeverity.Error,

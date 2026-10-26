@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parse } from '@apim-policy/document';
+import { parse } from '@charliethomson/apim-document';
 import { Catalog, type PolicyFile } from '../src/schema';
 import { validate } from '../src/validator';
 
@@ -232,7 +232,7 @@ describe('validate', () => {
 
 describe('validate with the bundled catalog', async () => {
   const { catalog: real } = await import('../src/catalog');
-  const { fixture } = await import('@apim-policy/fixtures');
+  const { fixture } = await import('@charliethomson/apim-fixtures');
   const run = (file: string) => validate(parse(fixture(file)), real).map((d) => d.code);
 
   it.each([

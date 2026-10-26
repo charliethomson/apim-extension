@@ -1,8 +1,8 @@
-import { extractRootOf, fragmentIdsFor, type Scope, scopeFromInstancePath, scopeFromPath, scopeLabel } from '@apim-policy/core';
-import { type Document, parse } from '@apim-policy/document';
-import type { Suggestion } from '@apim-policy/catalog';
-import { type KnownVariable, knownVariables, type OuterSet, outerVariables, type PolicySummary, type RelatedFile, summarize } from '@apim-policy/analysis';
-import type { NamedValue } from '@apim-policy/azure';
+import { extractRootOf, fragmentIdsFor, type Scope, scopeFromInstancePath, scopeFromPath, scopeLabel } from '@charliethomson/apim-core';
+import { type Document, parse } from '@charliethomson/apim-document';
+import type { Suggestion } from '@charliethomson/apim-catalog';
+import { type KnownVariable, knownVariables, type OuterSet, outerVariables, type PolicySummary, type RelatedFile, summarize } from '@charliethomson/apim-analysis';
+import type { NamedValue } from '@charliethomson/apim-azure';
 import { ExtractReader, type ExtractFiles, scopeChains, type ScopeReads } from './extract';
 import { type Disposable, EDIT_SCHEME, type InstanceSource, type RemoteFragment, type WorkspaceHost } from './host';
 

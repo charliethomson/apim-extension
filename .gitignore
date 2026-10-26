@@ -8,3 +8,4 @@ coverage/
 bin/
 obj/
 cli/*.tgz
+.kiln-npmrc

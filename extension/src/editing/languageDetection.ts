@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { LANGUAGE_ID } from '../documents';
-import { looksLikePolicy } from '@apim-policy/document';
+import { looksLikePolicy } from '@charliethomson/apim-document';
 
 /**
  * Switches XML documents to apim-policy when they match `apimPolicy.files.include` or, with

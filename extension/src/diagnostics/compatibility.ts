@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { CSharpEngine } from '@apim-policy/csharp-engine';
+import type { CSharpEngine } from '@charliethomson/apim-csharp-engine';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
 
 /**

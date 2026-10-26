@@ -5,7 +5,8 @@ core in `runner/`, `packages/testing`, and the `apim-policy` CLI in `cli/`, pack
 tarball with the runner inside and checked by `policy-tests.ci`. [testing.md](testing.md) is the
 test file reference. Milestone 4's done-when needs milestone 3: the random-user fixture's happy
 path calls `send-request` and the cache, so only its argument validation has a test so far.
-Installing on the agent (below) is still open: nothing is published. This replaces phase 3 of
+It's published to public npm as `@charliethomson/apim-cli` (`cli.prerelease`, `cli.release`), so
+an Azure DevOps step is `npx -y @charliethomson/apim-cli test`. This replaces phase 3 of
 [apim-connection-plan.md](apim-connection-plan.md) with the decisions made since.
 
 APIOps publishes policy files and checks nothing about what they do. A policy's logic is only
@@ -45,7 +46,7 @@ natively. It's a test runner with mocks, not a gateway emulator.
 apim-policy test [paths]            (cli/, Node)
    │  finds tests/*.yaml, loads each test
    ▼
-@apim-policy/testing                (packages/testing, no vscode)
+@charliethomson/apim-testing                (packages/testing, no vscode)
    │  test file schema and loader; scope chain from the APIOps layout;
    │  parses each policy and fragment (packages/document) into a run tree:
    │  elements, attributes, expressions with file/line/column, fragments by id;
@@ -143,7 +144,7 @@ what's modelled.
 1. **Runner core** (`runner/`, .NET, xunit). The run-tree protocol, expression compilation and its
    cache, the context implementation, the executed tier, `<base />` and fragments, named values.
    Tested in .NET against hand-built trees.
-2. **`@apim-policy/testing`.** The test file schema and loader, building the run tree from files,
+2. **`@charliethomson/apim-testing`.** The test file schema and loader, building the run tree from files,
    the process client, the expectation checks. 80% coverage like every package, with the runner
    faked in unit tests and real in a small set marked to need .NET.
 3. **Mocked and recorded tiers.**
@@ -160,11 +161,11 @@ output as the next run's expectations), a sample `azure-pipelines.yml` in the do
 
 ## Open questions
 
-- **Installing on the agent.** npm (`npx`, with the runner as a bundled framework-dependent
-  `.dll`), an Azure DevOps Marketplace task wrapping that, or a .NET global tool. Any of them
-  needs Node and a .NET runtime on the agent, which hosted images have. The runner targets the
-  oldest .NET still on the hosted images, with `RollForward=Major`. Check which that is on
-  `ubuntu-latest` and `windows-latest` before milestone 4.
+- **Installing on the agent.** Settled (2026-10-26): public npm. The hosted images have .NET 10
+  and Node 22 (ubuntu-24.04 image 20261023 has SDK 10.0.401; windows-2025 20261021 has runtime
+  10.0.13), so `npx` needs no setup steps. An Azure DevOps Marketplace task was set aside because
+  each org's admin would have to install it, and the fleet registry because every CI run would
+  then download from the homelab.
 - **Self-hosted agents with no internet.** The runner needs nothing from the network at run time,
   but installing it does.
 - **An API in several products.** Tests name the product; is a default (the only one, else

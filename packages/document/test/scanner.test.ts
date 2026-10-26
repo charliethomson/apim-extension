@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fixture } from '@apim-policy/fixtures';
+import { fixture } from '@charliethomson/apim-fixtures';
 import type { Document, Element, Node } from '../src/ast';
 import { parse } from '../src/scanner';
 

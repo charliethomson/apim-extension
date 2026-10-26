@@ -5,7 +5,7 @@
  * comments. Everything else is identifiers, numbers and single-character punctuation.
  */
 
-import type { OffsetRange } from '@apim-policy/core';
+import type { OffsetRange } from '@charliethomson/apim-core';
 
 export type TokenKind = 'identifier' | 'keyword' | 'string' | 'char' | 'number' | 'comment' | 'punct';
 

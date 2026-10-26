@@ -3,8 +3,8 @@
  * where a variable is declared, and values and types built from the JSON shapes.
  */
 
-import { type Document, escapeForDocument } from '@apim-policy/document';
-import { type FragmentDoc, type FragmentVariable, type HeaderModel, type IncludedFragment, type Includes, inlineShape, namedTypedefs, type PolicySummary, type Stop } from '@apim-policy/analysis';
+import { type Document, escapeForDocument } from '@charliethomson/apim-document';
+import { type FragmentDoc, type FragmentVariable, type HeaderModel, type IncludedFragment, type Includes, inlineShape, namedTypedefs, type PolicySummary, type Stop } from '@charliethomson/apim-analysis';
 import type { PolicyIndex } from './policyIndex';
 import type { ShapeService } from './shapes';
 

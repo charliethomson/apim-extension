@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { LANGUAGE_ID, toRange, type DocumentCache } from '../documents';
-import { expressionAt, isEscapedFormat, nodeAt } from '@apim-policy/document';
+import { expressionAt, isEscapedFormat, nodeAt } from '@charliethomson/apim-document';
 import {
   checkIncludes,
   draftModel,
@@ -34,15 +34,15 @@ import {
   typedefReferenceAt,
   unguardedReads,
   variableFamily,
-} from '@apim-policy/analysis';
-import { declarationOf, includedFragments, inputLine, type Layout, type PolicyIndex, type ShapeService, typeForTag, valueFor } from '@apim-policy/workspace';
+} from '@charliethomson/apim-analysis';
+import { declarationOf, includedFragments, inputLine, type Layout, type PolicyIndex, type ShapeService, typeForTag, valueFor } from '@charliethomson/apim-workspace';
 
 /**
- * Fragment headers (`@in` / `@out`, see fragmentDoc.ts in @apim-policy/analysis) in the editor:
+ * Fragment headers (`@in` / `@out`, see fragmentDoc.ts in @charliethomson/apim-analysis) in the editor:
  * an inlay hint after each include-fragment listing what the fragment takes and sets, hover on its
  * fragment-id, diagnostics for a header that disagrees with its fragment and for an include that
  * leaves a required input unset, and code actions that write the header. What each one says and
- * edits is worked out in @apim-policy/analysis and @apim-policy/workspace; this turns it into
+ * edits is worked out in @charliethomson/apim-analysis and @charliethomson/apim-workspace; this turns it into
  * VS Code's objects.
  */
 export function registerFragmentDocs(cache: DocumentCache, index: PolicyIndex<vscode.Uri>, shapes: ShapeService<vscode.Uri>): vscode.Disposable {

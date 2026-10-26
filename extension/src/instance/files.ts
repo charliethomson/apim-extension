@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { scopeFromInstancePath, scopeLabel, type Scope } from '@apim-policy/core';
-import { EDIT_SCHEME, INSTANCE_SCHEME } from '@apim-policy/workspace';
+import { scopeFromInstancePath, scopeLabel, type Scope } from '@charliethomson/apim-core';
+import { EDIT_SCHEME, INSTANCE_SCHEME } from '@charliethomson/apim-workspace';
 import type { InstanceConnection } from './connection';
 import type { PushSupport } from './push';
 
